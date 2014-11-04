@@ -4,6 +4,7 @@ import static spark.Spark.*;
 
 public class Zebra {
     public Zebra() {
-	get("/hello", (req, res) -> "Hello World");
+      setPort(80);
+      get("/", (req, res) -> "Hello World");
     }
 }
