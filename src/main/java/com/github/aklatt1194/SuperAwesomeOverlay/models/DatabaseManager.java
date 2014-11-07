@@ -49,5 +49,5 @@ public interface DatabaseManager {
      *        in UNIX ms since the epoch format.
      * @return A map from time to throughput for the interval.
      */
-    public Map<Long, Double> getThroughPutData(String node, long startTime, long endTime);
+    public Map<Long, Double> getThroughputData(String node, long startTime, long endTime);
 }

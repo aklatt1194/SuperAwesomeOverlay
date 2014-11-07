@@ -1,13 +1,12 @@
 package com.github.aklatt1194.SuperAwesomeOverlay.models;
 
 import java.sql.*;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
 public class DatabaseProvider implements DatabaseManager {
     
-    private static final String DATABASE = "sqlite-test.db";
+    private static final String DEFAULT_NAME = "sqlite-test.db";
     private static final String LATENCY_TABLE = "latency";
     private static final String THROUGHPUT_TABLE = "throughput";
     private static final String PATH = "/home/ubuntu/";
@@ -15,13 +14,21 @@ public class DatabaseProvider implements DatabaseManager {
     private Connection c;
     
     /**
-     * Setup the connection and construct the db and tables if necessary
+     * Setup a connection and construct a default test database if necessary
      */
     public DatabaseProvider() {
-        try {
+    	this("");
+    }
+    
+    /**
+     * Setup the connection and construct the db and tables if necessary
+     */
+    public DatabaseProvider(String name) {
+        String path = name.length() == 0 ? DEFAULT_NAME : PATH + name;
+    	try {
             // Open a connection to the DB (creates the DB if it does not exist)
             Class.forName("org.sqlite.JDBC");
-            c = DriverManager.getConnection("jdbc:sqlite:" + PATH +  DATABASE);
+            c = DriverManager.getConnection("jdbc:sqlite:" + path);
             System.out.println("Opened database successfully");
             
             // Create the throughput table if it does not exist
@@ -51,7 +58,7 @@ public class DatabaseProvider implements DatabaseManager {
         return getConnectionData(node, startTime, endTime, LATENCY_TABLE);
     }
 
-    public Map<Long, Double> getThroughPutData(String node, long startTime, long endTime) {
+    public Map<Long, Double> getThroughputData(String node, long startTime, long endTime) {
         return getConnectionData(node, startTime, endTime, THROUGHPUT_TABLE);
     }
     
