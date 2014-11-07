@@ -1,0 +1,6 @@
+#Ignore some stuff
+.classpath
+.metadata/
+.project
+sqlite-test.db
+target/
