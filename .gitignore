@@ -5,3 +5,4 @@
 sqlite-test.db
 target/
 .settings
+*~
