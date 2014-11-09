@@ -1,5 +1,7 @@
 package com.github.aklatt1194.SuperAwesomeOverlay;
 
+import org.apache.log4j.BasicConfigurator;
+
 import com.github.aklatt1194.SuperAwesomeOverlay.views.Zebra;
 
 public class Overlay {
@@ -10,5 +12,6 @@ public class Overlay {
 
     public static void main(String[] args) {
         new Zebra();
+        BasicConfigurator.configure();
     }
 }

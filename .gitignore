@@ -6,3 +6,5 @@ sqlite-test.db
 target/
 .settings
 *~
+output.log
+overlay.pid
