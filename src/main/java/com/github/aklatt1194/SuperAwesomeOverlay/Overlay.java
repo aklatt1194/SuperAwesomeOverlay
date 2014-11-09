@@ -11,6 +11,6 @@ public class Overlay {
         new WebRoutes();
         new RoutingTableEndpoint(new RoutingTable());
 
-        BasicConfigurator.configure();
+        //BasicConfigurator.configure();
     }
 }
