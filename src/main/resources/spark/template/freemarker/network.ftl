@@ -1,7 +1,7 @@
 <#include "header.ftl">
 
     <div class="container">
-      <div id="map"></div>
+      <div id="map" class="center-block"></div>
     </div>
 
     <script src="js/jquery.min.js"></script>
