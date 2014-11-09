@@ -2,7 +2,7 @@ package com.github.aklatt1194.SuperAwesomeOverlay;
 
 import org.apache.log4j.BasicConfigurator;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.views.Zebra;
+import com.github.aklatt1194.SuperAwesomeOverlay.views.WebRoutes;
 
 public class Overlay {
     public static final String[] NODES = {
@@ -11,7 +11,7 @@ public class Overlay {
             "ec2-54-173-133-146.compute-1.amazonaws.com" };
 
     public static void main(String[] args) {
-        new Zebra();
+        new WebRoutes();
         BasicConfigurator.configure();
     }
 }
