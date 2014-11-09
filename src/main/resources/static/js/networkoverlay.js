@@ -1,16 +1,15 @@
-var SAO = SAO || {}
+var SAO = SAO || {};
 
 SAO.setup = function() {
   // set the current tab to active
   $('a[href="' + window.location.pathname + '"]').parent().addClass('active');
 
   $.get('endpoints/known_nodes', function(data) {
-    SAO.known_nodes = data;
-    SAO.set_node_navigation(data);
+    SAO.setNodeNavigation(data);
   });
-}
+};
 
-SAO.set_node_navigation = function(nodes) {
+SAO.setNodeNavigation = function(nodes) {
   $('.fa-spinner').remove()
 
   for (var i = 0; i < nodes.length; i++) {
@@ -23,7 +22,10 @@ SAO.set_node_navigation = function(nodes) {
     if (nodes[i].hostname === window.location.host) {
       $('a.current-node').html(location_string);
     } else {
-      $('.dropdown-menu').append($('<li></li>').append($('<a></a>').html(location_string).attr('href', 'http://' + nodes[i].hostname)));
+      $('.dropdown-menu').append($('<li></li>').append($('<a></a>').html(location_string).attr('href', 'http://' + nodes[i].hostname + window.location.pathname)));
     }
   }
-}
+
+  if (SAO.networkMap)
+    SAO.networkMap.drawNodes(nodes);
+};

@@ -1,10 +1,18 @@
 <#include "header.ftl">
 
-<div class="container">
-  <div class="jumbotron">
-    <p>Network Route Map</p>
-  </div>
+    <div class="container">
+      <div id="map"></div>
+    </div>
 
-</div> <!-- /container -->
-
-<#include "footer.ftl">
+    <script src="js/jquery.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/networkoverlay.js"></script>
+    <script src="js/network-map.js"></script>
+    <script src="js/d3.v3.min.js"></script>
+    <script src="js/topojson.js"></script>
+    <script>
+      SAO.setup();
+      SAO.networkMap.init();
+    </script>
+  </body>
+</html>
