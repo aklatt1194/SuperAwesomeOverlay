@@ -29,3 +29,17 @@ SAO.setNodeNavigation = function(nodes) {
   if (SAO.networkMap)
     SAO.networkMap.drawNodes(nodes);
 };
+
+SAO.chat = function() {
+  var socket = new WebSocket('ws://' + window.location.host + ':8025/endpoints/chat'),
+    chatWindow = $('#chat-window');
+
+  socket.onmessage = function(msg) {
+    chatWindow.append($('<p></p>').html(msg.data));
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+
+  $('#send-message').click(function() {
+    socket.send($('#message').val());
+  });
+};

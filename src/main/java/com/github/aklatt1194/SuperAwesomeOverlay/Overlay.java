@@ -2,7 +2,6 @@ package com.github.aklatt1194.SuperAwesomeOverlay;
 
 import javax.websocket.DeploymentException;
 
-import org.apache.log4j.BasicConfigurator;
 import org.glassfish.tyrus.server.Server;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
@@ -19,6 +18,6 @@ public class Overlay {
                 ChatEndpoint.class);
         server.start();
 
-        BasicConfigurator.configure();
+        // BasicConfigurator.configure();
     }
 }
