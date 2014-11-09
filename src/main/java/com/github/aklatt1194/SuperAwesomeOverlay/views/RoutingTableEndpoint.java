@@ -89,7 +89,7 @@ public class RoutingTableEndpoint {
 
             String query = "SELECT x.country_code, region_name, city_name, latitude, longitude "
                     + "FROM city_location x, region_names y "
-                    + "WHERE loc_id = (SELECT loc_id FROM city_blocks WHERE ip_start <= " + intAddr + " ORDER BY ip_start DESC LIMIT 1)"
+                    + "WHERE loc_id = (SELECT loc_id FROM city_blocks WHERE ip_start <= " + Integer.toUnsignedLong(intAddr) + " ORDER BY ip_start DESC LIMIT 1)"
                     + "AND x.region_code = y.region_code AND x.country_code = y.country_code";
 
             try {
