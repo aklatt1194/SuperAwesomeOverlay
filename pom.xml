@@ -28,5 +28,10 @@
       <artifactId>sqlite-jdbc</artifactId>
       <version>3.7.2</version>
     </dependency>
+    <dependency>
+      <groupId>com.sparkjava</groupId>
+      <artifactId>spark-template-freemarker</artifactId>
+      <version>1.0</version>
+    </dependency>
   </dependencies>
 </project>
