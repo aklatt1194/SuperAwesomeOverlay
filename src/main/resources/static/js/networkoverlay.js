@@ -11,6 +11,8 @@ SAO.setup = function() {
 }
 
 SAO.set_node_navigation = function(nodes) {
+  $('.fa-spinner').remove()
+
   for (var i = 0; i < nodes.length; i++) {
     var location_string = nodes[i].country;
     if (nodes[i].region_name)

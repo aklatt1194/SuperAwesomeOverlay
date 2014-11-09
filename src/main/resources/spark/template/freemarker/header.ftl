@@ -5,6 +5,7 @@
     <title>NetworkOverlay</title>
     <link rel="stylesheet" href="css/bootstrap.min.css">
     <link rel="stylesheet" href="css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="css/font-awesome.min.css">
   </head>
 
   <body>
@@ -27,10 +28,11 @@
             <li><a href="/chat">Chat</a></li>
           </ul>
           <ul class="nav navbar-nav navbar-right">
-            <li><a class="current-node"></a></li>
+            <li><a class="current-node"><i class="fa fa-spinner fa-spin"></i></a></li>
             <li class="dropdown">
               <a href="#" class="dropdown-toggle" data-toggle="dropdown">Switch Node <span class="caret"></span></a>
               <ul class="dropdown-menu" role="menu">
+                <li><i class="fa fa-spinner fa-spin"></i></li>
               </ul>
             </li>
           </ul>
