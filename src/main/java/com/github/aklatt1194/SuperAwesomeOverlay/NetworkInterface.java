@@ -3,7 +3,6 @@ package com.github.aklatt1194.SuperAwesomeOverlay;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -30,7 +29,8 @@ public class NetworkInterface implements Runnable {
     private Selector selector;
     private ByteBuffer readBuffer;
     private BlockingQueue<ServerDataEvent> readPackets;
-    private BlockingQueue<ServerDataEvent> pendingData;
+    private BlockingQueue<ChangeRequest> pendingRequests;
+    private Map<SocketChannel, BlockingQueue<ByteBuffer>> pendingWrites;
 
     public static NetworkInterface getInstance() {
         if (instance == null)
@@ -46,9 +46,10 @@ public class NetworkInterface implements Runnable {
         this.routingTable = routingTable;
         tcpLinkTable = new HashMap<>();
 
-        readBuffer = ByteBuffer.allocate(8192);
+        readBuffer = ByteBuffer.allocateDirect(8192);
         readPackets = new LinkedBlockingQueue<>();
-        pendingData = new LinkedBlockingQueue<>();
+        pendingRequests = new LinkedBlockingQueue<>();
+        pendingWrites = new HashMap<>();
 
         // create the serverChannel and selector
         serverChannel = ServerSocketChannel.open();
@@ -67,34 +68,32 @@ public class NetworkInterface implements Runnable {
         thread = new Thread(new PacketRouter());
         thread.start();
 
-//        // We need to do something clever here. All the nodes should be up
-//        // before we try to connect.
-//        try {
-//            Thread.sleep(10000);
-//        } catch (InterruptedException e) {
-//        }
-//
-//        // figure out the external facing ip address, it is not the same as the
-//        // internal AWS one
-//        InetAddress serverAddr = InetAddress.getByName(isa.getHostName());
-//        for (InetAddress node : routingTable.getKnownNodes()) {
-//            if (node.hashCode() < serverAddr.hashCode()) {
-//                // connect to remote node
-//            }
-//        }
+        // // We need to do something clever here. All the nodes should be up
+        // // before we try to connect.
+        // try {
+        // Thread.sleep(10000);
+        // } catch (InterruptedException e) {
+        // }
+        //
+        // // figure out the external facing ip address, it is not the same as
+        // the
+        // // internal AWS one
+        // InetAddress serverAddr = InetAddress.getByName(isa.getHostName());
+        // for (InetAddress node : routingTable.getKnownNodes()) {
+        // if (node.hashCode() < serverAddr.hashCode()) {
+        // // connect to remote node
+        // }
+        // }
     }
 
     @Override
     public void run() {
         while (true) {
             try {
-                // if there is pending data to write, change the key interest
-                ByteBuffer pendingWrite = null;
-                if (!pendingData.isEmpty()) {
-                    ServerDataEvent event = pendingData.take();
-                    SelectionKey key = event.socket.keyFor(selector);
-                    key.interestOps(SelectionKey.OP_WRITE);
-                    pendingWrite = event.data;
+                if (!pendingRequests.isEmpty()) {
+                    ChangeRequest request = pendingRequests.take();
+                    SelectionKey key = request.socket.keyFor(selector);
+                    key.interestOps(request.ops);
                 }
 
                 // wait for an event
@@ -114,7 +113,7 @@ public class NetworkInterface implements Runnable {
                     } else if (key.isReadable()) {
                         this.read(key);
                     } else if (key.isWritable()) {
-                        this.write(key, pendingWrite);
+                        this.write(key);
                     }
                 }
 
@@ -125,10 +124,11 @@ public class NetworkInterface implements Runnable {
     }
 
     private void accept(SelectionKey key) throws IOException {
-        ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
+        ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key
+                .channel();
 
         SocketChannel socketChannel = serverSocketChannel.accept();
-        Socket socket = socketChannel.socket(); // add something to table?
+        // Socket socket = socketChannel.socket(); // add something to table?
         socketChannel.configureBlocking(false);
 
         // set selector to notify when data is to be read
@@ -151,17 +151,20 @@ public class NetworkInterface implements Runnable {
         }
 
         if (numRead == -1) {
-            // Remote closed socket cleanly. I don't think this should happen
-            // ever with our app.
+            // Remote closed socket cleanly
             key.cancel();
             socketChannel.close();
             return;
         }
+        
+        int len = readBuffer.position();
+        readBuffer.rewind();
+        ByteBuffer buf = readBuffer.get(new byte[len], 0, len);
+        buf.flip();
 
         while (true) {
-            try {
-                readPackets.put(new ServerDataEvent(socketChannel, readBuffer
-                        .duplicate()));
+            try {                
+                readPackets.put(new ServerDataEvent(socketChannel, buf));                
                 break;
             } catch (InterruptedException e) {
                 // TODO: is this correct?
@@ -173,24 +176,56 @@ public class NetworkInterface implements Runnable {
     private void send(SocketChannel socket, ByteBuffer data) {
         while (true) {
             try {
-                pendingData.put(new ServerDataEvent(socket, data));
+                pendingRequests.put(new ChangeRequest(socket,
+                        SelectionKey.OP_WRITE));
                 break;
             } catch (InterruptedException e) {
                 continue;
             }
         }
+
+        synchronized (pendingWrites) {
+            BlockingQueue<ByteBuffer> queue = pendingWrites.get(socket);
+            if (queue == null) {
+                queue = new LinkedBlockingQueue<ByteBuffer>();
+                pendingWrites.put(socket, queue);
+            }
+
+            while (true) {
+                try {
+                    queue.put(data);
+                    break;
+                } catch (InterruptedException e) {
+                    continue;
+                }
+            }
+        }
+
         selector.wakeup();
     }
-    
-    private boolean write(SelectionKey key, ByteBuffer data) throws IOException {
-        SocketChannel socketChannel = (SocketChannel)key.channel();
-        
-        socketChannel.write(data);
-        if (data.remaining() > 0)
-            return false;
-        
-        key.interestOps(SelectionKey.OP_READ);
-        return true;
+
+    private void write(SelectionKey key) throws IOException {
+        SocketChannel socketChannel = (SocketChannel) key.channel();
+
+        synchronized (pendingWrites) {
+            BlockingQueue<ByteBuffer> queue = pendingWrites.get(socketChannel);
+
+            while (!queue.isEmpty()) {
+                ByteBuffer buf = queue.peek();
+
+                System.out.println(buf.remaining());
+
+                socketChannel.write(buf);
+                if (buf.remaining() > 0) {
+                    // the socket buffer is full
+                    break;
+                }
+                queue.remove();
+            }
+
+            if (queue.isEmpty())
+                key.interestOps(SelectionKey.OP_READ);
+        }
     }
 
     private class PacketRouter implements Runnable {
@@ -200,28 +235,31 @@ public class NetworkInterface implements Runnable {
 
             while (true) {
                 try {
-                    readPackets.take();
+                    dataEvent = readPackets.take();
                 } catch (InterruptedException e) {
                     continue;
                 }
 
-                try {
-                    dataEvent = readPackets.take();
-                } catch (InterruptedException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-                System.out.println(dataEvent.data.toString());
                 send(dataEvent.socket, dataEvent.data);
             }
         }
     }
 
-    private class ServerDataEvent {
-        SocketChannel socket;
-        ByteBuffer data;
+    private class ChangeRequest {
+        private SocketChannel socket;
+        private int ops;
 
-        public ServerDataEvent(SocketChannel socket, ByteBuffer data) {
+        private ChangeRequest(SocketChannel socket, int ops) {
+            this.socket = socket;
+            this.ops = ops;
+        }
+    }
+
+    private class ServerDataEvent {
+        private SocketChannel socket;
+        private ByteBuffer data;
+
+        private ServerDataEvent(SocketChannel socket, ByteBuffer data) {
             this.socket = socket;
             this.data = data;
         }
