@@ -1,4 +1,4 @@
-package com.github.aklatt1194.SuperAwesomeOverlay.Network;
+package com.github.aklatt1194.SuperAwesomeOverlay.network;
 
 public class OverlayDatagramSocket extends SimpleSocket {
     @Override

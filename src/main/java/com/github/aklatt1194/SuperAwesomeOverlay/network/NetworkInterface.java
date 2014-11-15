@@ -1,4 +1,4 @@
-package com.github.aklatt1194.SuperAwesomeOverlay.Network;
+package com.github.aklatt1194.SuperAwesomeOverlay.network;
 
 import java.io.IOException;
 import java.net.InetAddress;

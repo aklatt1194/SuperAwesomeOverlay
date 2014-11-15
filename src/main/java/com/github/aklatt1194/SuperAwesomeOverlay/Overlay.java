@@ -6,8 +6,8 @@ import javax.websocket.DeploymentException;
 
 import org.glassfish.tyrus.server.Server;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.Network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
+import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.ChatEndpoint;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.RoutingTableEndpoint;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.WebRoutes;
