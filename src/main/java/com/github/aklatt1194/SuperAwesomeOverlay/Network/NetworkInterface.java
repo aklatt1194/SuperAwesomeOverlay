@@ -1,4 +1,4 @@
-package com.github.aklatt1194.SuperAwesomeOverlay;
+package com.github.aklatt1194.SuperAwesomeOverlay.Network;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -68,22 +68,32 @@ public class NetworkInterface implements Runnable {
         thread = new Thread(new PacketRouter());
         thread.start();
 
-        // // We need to do something clever here. All the nodes should be up
-        // // before we try to connect.
-        // try {
-        // Thread.sleep(10000);
-        // } catch (InterruptedException e) {
-        // }
-        //
-        // // figure out the external facing ip address, it is not the same as
-        // the
-        // // internal AWS one
-        // InetAddress serverAddr = InetAddress.getByName(isa.getHostName());
-        // for (InetAddress node : routingTable.getKnownNodes()) {
-        // if (node.hashCode() < serverAddr.hashCode()) {
-        // // connect to remote node
-        // }
-        // }
+        // We need to do something clever here. All the nodes should be up
+        // before we try to connect.
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+        }
+
+        // figure out the external facing ip address, it is not the same as
+        // the internal AWS one
+        InetAddress serverAddr = InetAddress.getByName(isa.getHostName());
+        for (InetAddress node : routingTable.getKnownNodes()) {
+
+            if (node.hashCode() < serverAddr.hashCode()) {
+                // for each node with hash < than this node, establish a
+                // connection and stick it in the table
+                SocketChannel socketChannel = SocketChannel.open();
+                if (socketChannel
+                        .connect(new InetSocketAddress(node, LINK_PORT))) {
+                    socketChannel.configureBlocking(false);
+                    socketChannel.register(selector, SelectionKey.OP_READ);
+                    synchronized (tcpLinkTable) {
+                        tcpLinkTable.put(node, socketChannel);
+                    }
+                }
+            }
+        }
     }
 
     @Override
@@ -135,7 +145,9 @@ public class NetworkInterface implements Runnable {
 
         // map the remote address to this socket
         InetAddress addr = socketChannel.socket().getInetAddress();
-        tcpLinkTable.put(addr, socketChannel);
+        synchronized (tcpLinkTable) {
+            tcpLinkTable.put(addr, socketChannel);
+        }
 
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
@@ -183,8 +195,9 @@ public class NetworkInterface implements Runnable {
     }
 
     // Queues up a packet so that it can be sent by the selector
-    private void send(SocketChannel socket, ByteBuffer data) {      
-        // place a pending request on the queue for this socketchannel to be changed to write
+    private void send(SocketChannel socket, ByteBuffer data) {
+        // place a pending request on the queue for this socketchannel to be
+        // changed to write
         while (true) {
             try {
                 pendingRequests.put(new ChangeRequest(socket,
