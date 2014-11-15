@@ -3,6 +3,7 @@ package com.github.aklatt1194.SuperAwesomeOverlay.Network;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -24,6 +25,7 @@ public class NetworkInterface implements Runnable {
 
     private RoutingTable routingTable;
     private Map<InetAddress, SocketChannel> tcpLinkTable;
+    private Map<Integer, SimpleSocket> portMap;
 
     private ServerSocketChannel serverChannel;
     private Selector selector;
@@ -45,6 +47,7 @@ public class NetworkInterface implements Runnable {
     public void initialize(RoutingTable routingTable) throws IOException {
         this.routingTable = routingTable;
         tcpLinkTable = new HashMap<>();
+        portMap = new HashMap<>();
 
         readBuffer = ByteBuffer.allocateDirect(8192);
         readPackets = new LinkedBlockingQueue<>();
@@ -77,16 +80,21 @@ public class NetworkInterface implements Runnable {
 
         // figure out the external facing ip address, it is not the same as
         // the internal AWS one
-        InetAddress serverAddr = InetAddress.getByName(isa.getHostName());
-        for (InetAddress node : routingTable.getKnownNodes()) {
+        InetAddress serverAddr = InetAddress.getByName(InetAddress
+                .getLocalHost().getHostName());
+        System.out.println(serverAddr.toString());
+        System.out.println(isa.getHostName());
 
+        for (InetAddress node : routingTable.getKnownNodes()) {
             if (node.hashCode() < serverAddr.hashCode()) {
                 // for each node with hash < than this node, establish a
                 // connection and stick it in the table
                 SocketChannel socketChannel = SocketChannel.open();
-                if (socketChannel
-                        .connect(new InetSocketAddress(node, LINK_PORT))) {
-                    socketChannel.configureBlocking(false);
+                socketChannel.configureBlocking(false);
+                boolean res = socketChannel.connect(new InetSocketAddress(node,
+                        LINK_PORT));
+
+                if (res) {
                     socketChannel.register(selector, SelectionKey.OP_READ);
                     synchronized (tcpLinkTable) {
                         tcpLinkTable.put(node, socketChannel);
@@ -240,8 +248,6 @@ public class NetworkInterface implements Runnable {
             while (!queue.isEmpty()) {
                 ByteBuffer buf = queue.peek();
 
-                System.out.println(buf.remaining());
-
                 socketChannel.write(buf);
                 if (buf.remaining() > 0) {
                     // the socket buffer is full
@@ -253,6 +259,25 @@ public class NetworkInterface implements Runnable {
             // we are done, set the key back to read
             if (queue.isEmpty())
                 key.interestOps(SelectionKey.OP_READ);
+        }
+    }
+    
+    // bind a SimpleSocket to a specific port
+    protected void bindSocket(SimpleSocket simpleSocket,
+            int port) throws SocketException {
+        
+        synchronized (portMap) {
+            if (portMap.get(port) != null)
+                throw new SocketException();
+            
+            portMap.put(port, simpleSocket);
+        }
+    }
+    
+    // close a SimpleSocket
+    public void closeSocket(SimpleSocket simpleSocket) {
+        synchronized (portMap) {
+            portMap.remove(simpleSocket);
         }
     }
 
@@ -294,4 +319,5 @@ public class NetworkInterface implements Runnable {
             this.data = data;
         }
     }
+
 }
