@@ -67,16 +67,9 @@ public class RoutingTableEndpoint {
 
     private List<Node> lookupKnownNodes() {
         List<Node> result = new ArrayList<>();
-        String[] nodes = model.getKnownNodes();
+        
 
-        for (String hostname : nodes) {
-            InetAddress addr;
-            try {
-                addr = InetAddress.getByName(hostname);
-            } catch (UnknownHostException e) {
-                continue;
-            }
-
+        for (InetAddress addr : model.getKnownNodes()) {
             // convert four bytes of ip address to an int
             byte[] byteAddr = addr.getAddress();
             int intAddr = (byteAddr[0] & 0xFF) << 24
@@ -84,7 +77,7 @@ public class RoutingTableEndpoint {
                     | (byteAddr[3] & 0xFF);
 
             Node node = new Node();
-            node.hostname = hostname;
+            node.hostname = addr.getHostName();
             node.ip = addr.getHostAddress();
 
             String query = "SELECT x.country_code, region_name, city_name, latitude, longitude "
