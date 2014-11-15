@@ -123,6 +123,8 @@ public class NetworkInterface implements Runnable {
         }
     }
 
+    // Accept a new connection. Save this socket in the tcpLinkTable and then
+    // add it to the selector.
     private void accept(SelectionKey key) throws IOException {
         ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key
                 .channel();
@@ -131,6 +133,10 @@ public class NetworkInterface implements Runnable {
         // Socket socket = socketChannel.socket(); // add something to table?
         socketChannel.configureBlocking(false);
 
+        // map the remote address to this socket
+        InetAddress addr = socketChannel.socket().getInetAddress();
+        tcpLinkTable.put(addr, socketChannel);
+
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
     }
@@ -138,8 +144,8 @@ public class NetworkInterface implements Runnable {
     private void read(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
 
+        // clear out the read buffer then do the read
         this.readBuffer.clear();
-
         int numRead;
         try {
             numRead = socketChannel.read(this.readBuffer);
@@ -156,15 +162,18 @@ public class NetworkInterface implements Runnable {
             socketChannel.close();
             return;
         }
-        
+
+        // copy everything out of the read buffer into a new buffer
         int len = readBuffer.position();
         readBuffer.rewind();
         ByteBuffer buf = readBuffer.get(new byte[len], 0, len);
         buf.flip();
 
+        // stick the packet on the readPackets queue for the PacketHandler to
+        // deal with
         while (true) {
-            try {                
-                readPackets.put(new ServerDataEvent(socketChannel, buf));                
+            try {
+                readPackets.put(new ServerDataEvent(socketChannel, buf));
                 break;
             } catch (InterruptedException e) {
                 // TODO: is this correct?
@@ -173,7 +182,9 @@ public class NetworkInterface implements Runnable {
         }
     }
 
-    private void send(SocketChannel socket, ByteBuffer data) {
+    // Queues up a packet so that it can be sent by the selector
+    private void send(SocketChannel socket, ByteBuffer data) {      
+        // place a pending request on the queue for this socketchannel to be changed to write
         while (true) {
             try {
                 pendingRequests.put(new ChangeRequest(socket,
@@ -184,6 +195,7 @@ public class NetworkInterface implements Runnable {
             }
         }
 
+        // place the data onto the pending writes queue for the proper socket
         synchronized (pendingWrites) {
             BlockingQueue<ByteBuffer> queue = pendingWrites.get(socket);
             if (queue == null) {
@@ -201,9 +213,11 @@ public class NetworkInterface implements Runnable {
             }
         }
 
+        // Wakeup the selector thread
         selector.wakeup();
     }
 
+    // pull any pending writes of a socket's queue and write them to the socket
     private void write(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
 
@@ -223,6 +237,7 @@ public class NetworkInterface implements Runnable {
                 queue.remove();
             }
 
+            // we are done, set the key back to read
             if (queue.isEmpty())
                 key.interestOps(SelectionKey.OP_READ);
         }
@@ -245,6 +260,7 @@ public class NetworkInterface implements Runnable {
         }
     }
 
+    // helper class with the fields needed to queue up a key change request
     private class ChangeRequest {
         private SocketChannel socket;
         private int ops;
@@ -255,6 +271,7 @@ public class NetworkInterface implements Runnable {
         }
     }
 
+    // helper class with the fields needed to queue up a server read event
     private class ServerDataEvent {
         private SocketChannel socket;
         private ByteBuffer data;
