@@ -17,6 +17,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
+import com.github.aklatt1194.SuperAwesomeOverlay.utils.ExternalIP;
 
 public class NetworkInterface implements Runnable {
     private static final int LINK_PORT = 3333;
@@ -80,13 +81,10 @@ public class NetworkInterface implements Runnable {
 
         // figure out the external facing ip address, it is not the same as
         // the internal AWS one
-        InetAddress serverAddr = InetAddress.getByName(InetAddress
-                .getLocalHost().getHostName());
-        System.out.println(serverAddr.toString());
-        System.out.println(isa.getHostName());
-
+        InetAddress serverAddr = ExternalIP.getExternalAddress();
+        
         for (InetAddress node : routingTable.getKnownNodes()) {
-            if (node.hashCode() < serverAddr.hashCode()) {
+            if (node.getHostAddress().compareTo(serverAddr.getHostAddress()) < 0) {
                 // for each node with hash < than this node, establish a
                 // connection and stick it in the table
                 SocketChannel socketChannel = SocketChannel.open();
