@@ -48,11 +48,14 @@ public class SimpleDatagramPacket {
         buf.putInt(length);
         buf.put(payload);
         
+        buf.flip();
+        
         return buf;
     }
     
     protected static SimpleDatagramPacket createFromBuffer(ByteBuffer buf, InetAddress src, InetAddress dst) {
         if (buf.remaining() < 12)
+            // there isn't a complete header, this must be a partial read
             return null;
         
         int srcPort = buf.getInt();
@@ -60,6 +63,7 @@ public class SimpleDatagramPacket {
         int length = buf.getInt();
         
         if (buf.remaining() < length - HEADER_LENGTH) {
+            // there isn't a complete payload, this must be a partial read
             buf.position(buf.position() - HEADER_LENGTH);
             return null;
         }

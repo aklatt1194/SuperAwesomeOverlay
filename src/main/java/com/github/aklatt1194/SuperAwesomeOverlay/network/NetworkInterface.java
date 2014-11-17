@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
@@ -27,6 +28,7 @@ public class NetworkInterface implements Runnable {
     private RoutingTable routingTable;
     private Map<InetAddress, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
+    private Map<InetAddress, SocketChannel> newSocketChannels;
 
     private ServerSocketChannel serverChannel;
     private Selector selector;
@@ -48,14 +50,15 @@ public class NetworkInterface implements Runnable {
 
     public void initialize(RoutingTable routingTable) throws IOException {
         this.routingTable = routingTable;
-        tcpLinkTable = new HashMap<>();
-        portMap = new HashMap<>();
+        tcpLinkTable = new ConcurrentHashMap<>();
+        portMap = new ConcurrentHashMap<>();
+        newSocketChannels = new ConcurrentHashMap<>();
 
         readBuffer = ByteBuffer.allocateDirect(8192);
         pendingBuffer = ByteBuffer.allocate(8192);
         readPackets = new LinkedBlockingQueue<>();
         pendingRequests = new LinkedBlockingQueue<>();
-        pendingWrites = new HashMap<>();
+        pendingWrites = new ConcurrentHashMap<>();
 
         // create the serverChannel and selector
         serverChannel = ServerSocketChannel.open();
@@ -85,23 +88,29 @@ public class NetworkInterface implements Runnable {
         // the internal AWS one
         InetAddress serverAddr = ExternalIP.getExternalAddress();
 
+        InetAddress remote = null;
+
         for (InetAddress node : routingTable.getKnownNodes()) {
-            if (node.getHostAddress().compareTo(serverAddr.getHostAddress()) < 0) {
+            if (node.getHostAddress().compareTo(serverAddr.getHostAddress()) > 0) {
                 // for each node with hash < than this node, establish a
                 // connection and stick it in the table
                 SocketChannel socketChannel = SocketChannel.open();
-                socketChannel.configureBlocking(false);
                 boolean res = socketChannel.connect(new InetSocketAddress(node,
                         LINK_PORT));
+                socketChannel.configureBlocking(false);
 
                 if (res) {
-                    socketChannel.register(selector, SelectionKey.OP_READ);
-                    synchronized (tcpLinkTable) {
-                        tcpLinkTable.put(node, socketChannel);
-                    }
+                    tcpLinkTable.put(node, socketChannel);
+                    newSocketChannels.put(node, socketChannel);
                 }
+                selector.wakeup();
+
+                remote = node;
             }
         }
+
+        send(new SimpleDatagramPacket(serverAddr, remote, 123, 456, new byte[] {
+                0x01, 0x02, 0x03, 0x04 }));
     }
 
     @Override
@@ -135,6 +144,12 @@ public class NetworkInterface implements Runnable {
                     }
                 }
 
+                // add any new connections to the selector
+                for (InetAddress addr : newSocketChannels.keySet()) {
+                    newSocketChannels.remove(addr).register(selector,
+                            SelectionKey.OP_READ);
+                }
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -153,9 +168,8 @@ public class NetworkInterface implements Runnable {
 
         // map the remote address to this socket
         InetAddress addr = socketChannel.socket().getInetAddress();
-        synchronized (tcpLinkTable) {
-            tcpLinkTable.put(addr, socketChannel);
-        }
+
+        tcpLinkTable.put(addr, socketChannel);
 
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
@@ -186,7 +200,8 @@ public class NetworkInterface implements Runnable {
         ByteBuffer readBytes = ByteBuffer.allocate(pendingBuffer.remaining()
                 + readBuffer.remaining());
         if (pendingBuffer.remaining() > 0) {
-            // we had read a partial packet during the last read, stick it on the front
+            // we had read a partial packet during the last read, stick it on
+            // the front
             readBytes.put(pendingBuffer);
             pendingBuffer.clear();
         }
@@ -226,7 +241,7 @@ public class NetworkInterface implements Runnable {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
         SocketChannel socket = tcpLinkTable.get(packet.getDestination());
-        
+
         while (true) {
             try {
                 pendingRequests.put(new ChangeRequest(socket,
@@ -238,20 +253,18 @@ public class NetworkInterface implements Runnable {
         }
 
         // place the data onto the pending writes queue for the proper socket
-        synchronized (pendingWrites) {
-            BlockingQueue<ByteBuffer> queue = pendingWrites.get(socket);
-            if (queue == null) {
-                queue = new LinkedBlockingQueue<ByteBuffer>();
-                pendingWrites.put(socket, queue);
-            }
+        BlockingQueue<ByteBuffer> queue = pendingWrites.get(socket);
+        if (queue == null) {
+            queue = new LinkedBlockingQueue<ByteBuffer>();
+            pendingWrites.put(socket, queue);
+        }
 
-            while (true) {
-                try {
-                    queue.put(packet.getRawPacket());
-                    break;
-                } catch (InterruptedException e) {
-                    continue;
-                }
+        while (true) {
+            try {
+                queue.put(packet.getRawPacket());
+                break;
+            } catch (InterruptedException e) {
+                continue;
             }
         }
 
@@ -262,44 +275,38 @@ public class NetworkInterface implements Runnable {
     // pull any pending writes of a socket's queue and write them to the socket
     private void write(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
+        BlockingQueue<ByteBuffer> queue = pendingWrites.get(socketChannel);
 
-        synchronized (pendingWrites) {
-            BlockingQueue<ByteBuffer> queue = pendingWrites.get(socketChannel);
+        while (!queue.isEmpty()) {
+            ByteBuffer buf = queue.peek();
 
-            while (!queue.isEmpty()) {
-                ByteBuffer buf = queue.peek();
-
-                socketChannel.write(buf);
-                if (buf.remaining() > 0) {
-                    // the socket buffer is full
-                    break;
-                }
-                queue.remove();
+            socketChannel.write(buf);
+            if (buf.remaining() > 0) {
+                // the socket buffer is full
+                break;
             }
-
-            // we are done, set the key back to read
-            if (queue.isEmpty())
-                key.interestOps(SelectionKey.OP_READ);
+            queue.remove();
         }
+
+        // we are done, set the key back to read
+        if (queue.isEmpty())
+            key.interestOps(SelectionKey.OP_READ);
     }
 
     // bind a SimpleSocket to a specific port
     protected void bindSocket(SimpleSocket simpleSocket, int port)
             throws SocketException {
 
-        synchronized (portMap) {
-            if (portMap.get(port) != null)
-                throw new SocketException();
+        if (portMap.get(port) != null)
+            throw new SocketException();
 
-            portMap.put(port, simpleSocket);
-        }
+        portMap.put(port, simpleSocket);
     }
 
     // close a SimpleSocket
     public void closeSocket(SimpleSocket simpleSocket) {
-        synchronized (portMap) {
-            portMap.remove(simpleSocket);
-        }
+
+        portMap.remove(simpleSocket);
     }
 
     private class PacketRouter implements Runnable {
@@ -314,8 +321,9 @@ public class NetworkInterface implements Runnable {
                     continue;
                 }
 
-                System.out.println("src " + dataEvent.packet.getSource().toString());
-                //send(dataEvent.socket, dataEvent.packet);
+                System.out.println("src "
+                        + dataEvent.packet.getSource().toString());
+                // send(dataEvent.socket, dataEvent.packet);
             }
         }
     }
