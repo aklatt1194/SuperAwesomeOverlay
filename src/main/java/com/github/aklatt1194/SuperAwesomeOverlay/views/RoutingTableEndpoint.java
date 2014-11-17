@@ -4,7 +4,6 @@ import static com.github.aklatt1194.SuperAwesomeOverlay.utils.JsonUtil.json;
 import static spark.Spark.get;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;

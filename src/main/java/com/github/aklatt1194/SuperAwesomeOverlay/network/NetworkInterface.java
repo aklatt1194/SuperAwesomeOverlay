@@ -31,6 +31,7 @@ public class NetworkInterface implements Runnable {
     private ServerSocketChannel serverChannel;
     private Selector selector;
     private ByteBuffer readBuffer;
+    private ByteBuffer pendingBuffer;
     private BlockingQueue<ServerDataEvent> readPackets;
     private BlockingQueue<ChangeRequest> pendingRequests;
     private Map<SocketChannel, BlockingQueue<ByteBuffer>> pendingWrites;
@@ -51,6 +52,7 @@ public class NetworkInterface implements Runnable {
         portMap = new HashMap<>();
 
         readBuffer = ByteBuffer.allocateDirect(8192);
+        pendingBuffer = ByteBuffer.allocate(8192);
         readPackets = new LinkedBlockingQueue<>();
         pendingRequests = new LinkedBlockingQueue<>();
         pendingWrites = new HashMap<>();
@@ -82,7 +84,7 @@ public class NetworkInterface implements Runnable {
         // figure out the external facing ip address, it is not the same as
         // the internal AWS one
         InetAddress serverAddr = ExternalIP.getExternalAddress();
-        
+
         for (InetAddress node : routingTable.getKnownNodes()) {
             if (node.getHostAddress().compareTo(serverAddr.getHostAddress()) < 0) {
                 // for each node with hash < than this node, establish a
@@ -181,29 +183,50 @@ public class NetworkInterface implements Runnable {
             return;
         }
 
-        // copy everything out of the read buffer into a new buffer
-        int len = readBuffer.position();
-        readBuffer.rewind();
-        ByteBuffer buf = readBuffer.get(new byte[len], 0, len);
-        buf.flip();
+        ByteBuffer readBytes = ByteBuffer.allocate(pendingBuffer.remaining()
+                + readBuffer.remaining());
+        if (pendingBuffer.remaining() > 0) {
+            // we had read a partial packet during the last read, stick it on the front
+            readBytes.put(pendingBuffer);
+            pendingBuffer.clear();
+        }
+        readBytes.put(readBuffer);
 
         // stick the packet on the readPackets queue for the PacketHandler to
         // deal with
         while (true) {
-            try {
-                readPackets.put(new ServerDataEvent(socketChannel, buf));
+            SimpleDatagramPacket packet = SimpleDatagramPacket
+                    .createFromBuffer(readBytes, socketChannel.socket()
+                            .getInetAddress(), socketChannel.socket()
+                            .getLocalAddress());
+
+            if (packet == null)
+                // there wasn't a full packets worth of bytes left
                 break;
-            } catch (InterruptedException e) {
-                // TODO: is this correct?
-                continue;
+
+            while (true) {
+                try {
+                    readPackets.put(new ServerDataEvent(socketChannel, packet));
+                    break;
+                } catch (InterruptedException e) {
+                    continue;
+                }
             }
+
+            if (readBuffer.remaining() > 0)
+                // if there are any bytes left, stick them on the pending
+                // buffer. we will append them to the front of the read buffer
+                // the next time this method is called
+                pendingBuffer.put(readBytes);
         }
     }
 
     // Queues up a packet so that it can be sent by the selector
-    private void send(SocketChannel socket, ByteBuffer data) {
+    private void send(SimpleDatagramPacket packet) {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
+        SocketChannel socket = tcpLinkTable.get(packet.getDestination());
+        
         while (true) {
             try {
                 pendingRequests.put(new ChangeRequest(socket,
@@ -224,7 +247,7 @@ public class NetworkInterface implements Runnable {
 
             while (true) {
                 try {
-                    queue.put(data);
+                    queue.put(packet.getRawPacket());
                     break;
                 } catch (InterruptedException e) {
                     continue;
@@ -259,19 +282,19 @@ public class NetworkInterface implements Runnable {
                 key.interestOps(SelectionKey.OP_READ);
         }
     }
-    
+
     // bind a SimpleSocket to a specific port
-    protected void bindSocket(SimpleSocket simpleSocket,
-            int port) throws SocketException {
-        
+    protected void bindSocket(SimpleSocket simpleSocket, int port)
+            throws SocketException {
+
         synchronized (portMap) {
             if (portMap.get(port) != null)
                 throw new SocketException();
-            
+
             portMap.put(port, simpleSocket);
         }
     }
-    
+
     // close a SimpleSocket
     public void closeSocket(SimpleSocket simpleSocket) {
         synchronized (portMap) {
@@ -291,7 +314,8 @@ public class NetworkInterface implements Runnable {
                     continue;
                 }
 
-                send(dataEvent.socket, dataEvent.data);
+                System.out.println("src " + dataEvent.packet.getSource().toString());
+                //send(dataEvent.socket, dataEvent.packet);
             }
         }
     }
@@ -308,13 +332,15 @@ public class NetworkInterface implements Runnable {
     }
 
     // helper class with the fields needed to queue up a server read event
+    @SuppressWarnings("unused")
     private class ServerDataEvent {
         private SocketChannel socket;
-        private ByteBuffer data;
+        private SimpleDatagramPacket packet;
 
-        private ServerDataEvent(SocketChannel socket, ByteBuffer data) {
+        private ServerDataEvent(SocketChannel socket,
+                SimpleDatagramPacket packet) {
             this.socket = socket;
-            this.data = data;
+            this.packet = packet;
         }
     }
 
