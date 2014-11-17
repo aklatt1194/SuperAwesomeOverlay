@@ -6,7 +6,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public abstract class SimpleSocket {
-    private BlockingQueue<ByteBuffer> readQueue;
+    protected BlockingQueue<SimpleDatagramPacket> readQueue;
     private int port;
 
     public SimpleSocket() {
@@ -24,19 +24,19 @@ public abstract class SimpleSocket {
         }
     }
 
-    public abstract void send();
+    public abstract void send(SimpleDatagramPacket packet);
 
-    public ByteBuffer receive() {
-        ByteBuffer bb;
+    public SimpleDatagramPacket receive() {
+        SimpleDatagramPacket packet;
         while (true) {
             try {
-                bb = readQueue.take();
+                packet = readQueue.take();
                 break;
             } catch (InterruptedException e) {
                 continue;
             }
         }
-        return bb;
+        return packet;
     }
 
     public void close() {

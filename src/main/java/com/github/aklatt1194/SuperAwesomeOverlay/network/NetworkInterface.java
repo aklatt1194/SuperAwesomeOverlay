@@ -86,12 +86,8 @@ public class NetworkInterface implements Runnable {
 
         // figure out the external facing ip address, it is not the same as
         // the internal AWS one
-        InetAddress serverAddr = ExternalIP.getExternalAddress();
-
-        InetAddress remote = null;
-
-        for (InetAddress node : routingTable.getKnownNodes()) {
-            if (node.getHostAddress().compareTo(serverAddr.getHostAddress()) > 0) {
+        for (InetAddress node : routingTable.getKnownNeigborAddresses()) {
+            if (node.getHostAddress().compareTo(routingTable.getSelfAddress().getHostAddress()) > 0) {
                 // for each node with hash < than this node, establish a
                 // connection and stick it in the table
                 SocketChannel socketChannel = SocketChannel.open();
@@ -104,13 +100,8 @@ public class NetworkInterface implements Runnable {
                     newSocketChannels.put(node, socketChannel);
                 }
                 selector.wakeup();
-
-                remote = node;
             }
         }
-
-        send(new SimpleDatagramPacket(serverAddr, remote, 123, 456, new byte[] {
-                0x01, 0x02, 0x03, 0x04 }));
     }
 
     @Override
@@ -237,10 +228,15 @@ public class NetworkInterface implements Runnable {
     }
 
     // Queues up a packet so that it can be sent by the selector
-    private void send(SimpleDatagramPacket packet) {
+    protected void send(SimpleDatagramPacket packet) {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
         SocketChannel socket = tcpLinkTable.get(packet.getDestination());
+        
+        if (socket == null) {
+            // we aren't actually connected to the destination
+            // TODO
+        }
 
         while (true) {
             try {
@@ -304,11 +300,10 @@ public class NetworkInterface implements Runnable {
     }
 
     // close a SimpleSocket
-    public void closeSocket(SimpleSocket simpleSocket) {
-
+    protected void closeSocket(SimpleSocket simpleSocket) {
         portMap.remove(simpleSocket);
     }
-
+    
     private class PacketRouter implements Runnable {
         @Override
         public void run() {
@@ -321,9 +316,15 @@ public class NetworkInterface implements Runnable {
                     continue;
                 }
 
-                System.out.println("src "
-                        + dataEvent.packet.getSource().toString());
-                // send(dataEvent.socket, dataEvent.packet);
+                BlockingQueue<SimpleDatagramPacket> readQueue = portMap
+                        .get(dataEvent.packet.getSourcePort()).readQueue;
+
+                try {
+                    readQueue.put(dataEvent.packet);
+                    break;
+                } catch (InterruptedException e) {
+                    continue;
+                }
             }
         }
     }

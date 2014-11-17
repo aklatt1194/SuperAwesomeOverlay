@@ -1,9 +1,12 @@
 package com.github.aklatt1194.SuperAwesomeOverlay.models;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.github.aklatt1194.SuperAwesomeOverlay.utils.ExternalIP;
 
 public class RoutingTable {
     public static final String[] NODES_BOOTSTRAP = {
@@ -13,19 +16,34 @@ public class RoutingTable {
         "ec2-54-172-69-181.compute-1.amazonaws.com"};
 
     private List<InetAddress> nodes;
+    private InetAddress selfAddr;
     
     public RoutingTable() {
         nodes = new ArrayList<>();
+        
+        try {
+            selfAddr = ExternalIP.getExternalAddress();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        
         for (String node: NODES_BOOTSTRAP) {
             try {
-                nodes.add(InetAddress.getByName(node));
+                InetAddress addr = InetAddress.getByName(node);
+                if (!addr.getHostAddress().equals(selfAddr.getHostAddress()))
+                    nodes.add(InetAddress.getByName(node));
             } catch (UnknownHostException e) {
                 // pass
             }
         }
     }
     
-    public List<InetAddress> getKnownNodes() {
+    public List<InetAddress> getKnownNeigborAddresses() {
         return nodes;
+    }
+    
+    public InetAddress getSelfAddress() {
+        return selfAddr;
     }
 }

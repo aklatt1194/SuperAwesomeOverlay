@@ -66,9 +66,10 @@ public class RoutingTableEndpoint {
 
     private List<Node> lookupKnownNodes() {
         List<Node> result = new ArrayList<>();
-        
+        List<InetAddress> nodes = model.getKnownNeigborAddresses();
+        nodes.add(model.getSelfAddress());
 
-        for (InetAddress addr : model.getKnownNodes()) {
+        for (InetAddress addr : nodes) {
             // convert four bytes of ip address to an int
             byte[] byteAddr = addr.getAddress();
             int intAddr = (byteAddr[0] & 0xFF) << 24

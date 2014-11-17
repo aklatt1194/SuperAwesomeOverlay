@@ -16,14 +16,14 @@ public class Overlay {
     public static void main(String[] args) throws DeploymentException {
         // create routing table and initialize the network interface
         RoutingTable routingTable = new RoutingTable();
-        
+
         try {
             NetworkInterface.getInstance().initialize(routingTable);
         } catch (IOException e) {
             System.err.println("Unable to initialize network interface");
             System.exit(1);
         }
-        
+
         // web routes and endpoints
         new WebRoutes();
         new RoutingTableEndpoint(routingTable);
@@ -35,5 +35,6 @@ public class Overlay {
 
         // uncomment for extended logging
         // BasicConfigurator.configure();
+        new PingTester(routingTable);
     }
 }
