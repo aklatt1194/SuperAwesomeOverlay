@@ -1,4 +1,5 @@
 package com.github.aklatt1194.SuperAwesomeOverlay;
+
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Date;
@@ -29,7 +30,7 @@ public class PingTester {
         public void run() {
             while (true) {
                 try {
-                    Thread.sleep(10000);
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) {
                 }
                 for (InetAddress node : routingTable.getKnownNeigborAddresses()) {
@@ -66,10 +67,10 @@ public class PingTester {
         public void run() {
             while (true) {
                 SimpleDatagramPacket packet = socket.receive();
-                socket.send(new SimpleDatagramPacket(packet.getSource(),
-                        routingTable.getSelfAddress(), packet
-                                .getDestinationPort(), packet.getSourcePort(),
-                        packet.getPayload()));
+                socket.send(new SimpleDatagramPacket(routingTable
+                        .getSelfAddress(), packet.getSource(), packet
+                        .getDestinationPort(), packet.getSourcePort(), packet
+                        .getPayload()));
             }
         }
     }

@@ -33,10 +33,10 @@ public class NetworkInterface implements Runnable {
     private ServerSocketChannel serverChannel;
     private Selector selector;
     private ByteBuffer readBuffer;
-    private ByteBuffer pendingBuffer;
     private BlockingQueue<ServerDataEvent> readPackets;
     private BlockingQueue<ChangeRequest> pendingRequests;
     private Map<SocketChannel, BlockingQueue<ByteBuffer>> pendingWrites;
+    private Map<SocketChannel, ByteBuffer> pendingReads;
 
     public static NetworkInterface getInstance() {
         if (instance == null)
@@ -55,10 +55,10 @@ public class NetworkInterface implements Runnable {
         newSocketChannels = new ConcurrentHashMap<>();
 
         readBuffer = ByteBuffer.allocateDirect(8192);
-        pendingBuffer = ByteBuffer.allocate(8192);
         readPackets = new LinkedBlockingQueue<>();
         pendingRequests = new LinkedBlockingQueue<>();
         pendingWrites = new ConcurrentHashMap<>();
+        pendingReads = new ConcurrentHashMap<>();
 
         // create the serverChannel and selector
         serverChannel = ServerSocketChannel.open();
@@ -87,7 +87,8 @@ public class NetworkInterface implements Runnable {
         // figure out the external facing ip address, it is not the same as
         // the internal AWS one
         for (InetAddress node : routingTable.getKnownNeigborAddresses()) {
-            if (node.getHostAddress().compareTo(routingTable.getSelfAddress().getHostAddress()) > 0) {
+            if (node.getHostAddress().compareTo(
+                    routingTable.getSelfAddress().getHostAddress()) > 0) {
                 // for each node with hash < than this node, establish a
                 // connection and stick it in the table
                 SocketChannel socketChannel = SocketChannel.open();
@@ -188,27 +189,42 @@ public class NetworkInterface implements Runnable {
             return;
         }
 
-        ByteBuffer readBytes = ByteBuffer.allocate(pendingBuffer.remaining()
-                + readBuffer.remaining());
-        if (pendingBuffer.remaining() > 0) {
-            // we had read a partial packet during the last read, stick it on
-            // the front
-            readBytes.put(pendingBuffer);
-            pendingBuffer.clear();
+        readBuffer.flip();
+        ByteBuffer pendingBytes = pendingReads.get(socketChannel);
+        ByteBuffer totalBytes;
+
+        if (pendingBytes != null) {
+            pendingReads.put(socketChannel, null);
+            totalBytes = ByteBuffer.allocate(pendingBytes.remaining()
+                    + readBuffer.remaining());
+            totalBytes.put(pendingBytes);
+            totalBytes.put(readBuffer);
+        } else {
+            totalBytes = readBuffer;
         }
-        readBytes.put(readBuffer);
+
+        totalBytes.rewind();
 
         // stick the packet on the readPackets queue for the PacketHandler to
         // deal with
         while (true) {
             SimpleDatagramPacket packet = SimpleDatagramPacket
-                    .createFromBuffer(readBytes, socketChannel.socket()
-                            .getInetAddress(), socketChannel.socket()
-                            .getLocalAddress());
+                    .createFromBuffer(totalBytes, socketChannel.socket()
+                            .getInetAddress(), routingTable.getSelfAddress());
 
-            if (packet == null)
-                // there wasn't a full packets worth of bytes left
+            if (packet == null) {
+                if (totalBytes.remaining() > 0) {
+                    // if there are any bytes left, stick them on the pending
+                    // buffer. we will append them to the front of the read
+                    // buffer
+                    // the next time this method is called
+                    ByteBuffer remaining = ByteBuffer.allocate(totalBytes
+                            .remaining());
+                    remaining.put(totalBytes);
+                    pendingReads.put(socketChannel, remaining);
+                }
                 break;
+            }
 
             while (true) {
                 try {
@@ -219,11 +235,6 @@ public class NetworkInterface implements Runnable {
                 }
             }
 
-            if (readBuffer.remaining() > 0)
-                // if there are any bytes left, stick them on the pending
-                // buffer. we will append them to the front of the read buffer
-                // the next time this method is called
-                pendingBuffer.put(readBytes);
         }
     }
 
@@ -232,7 +243,7 @@ public class NetworkInterface implements Runnable {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
         SocketChannel socket = tcpLinkTable.get(packet.getDestination());
-        
+
         if (socket == null) {
             // we aren't actually connected to the destination
             // TODO
@@ -303,7 +314,7 @@ public class NetworkInterface implements Runnable {
     protected void closeSocket(SimpleSocket simpleSocket) {
         portMap.remove(simpleSocket);
     }
-    
+
     private class PacketRouter implements Runnable {
         @Override
         public void run() {
@@ -317,7 +328,7 @@ public class NetworkInterface implements Runnable {
                 }
 
                 BlockingQueue<SimpleDatagramPacket> readQueue = portMap
-                        .get(dataEvent.packet.getSourcePort()).readQueue;
+                        .get(dataEvent.packet.getDestinationPort()).readQueue;
 
                 try {
                     readQueue.put(dataEvent.packet);
