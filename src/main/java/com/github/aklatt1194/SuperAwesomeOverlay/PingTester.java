@@ -11,7 +11,7 @@ import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 public class PingTester {
     public PingTester(RoutingTable routingTable) {
         Thread sender = new Thread(new PingTestSender(routingTable));
-        Thread receiver = new Thread(new PingTestReceiver(routingTable));
+        Thread receiver = new Thread(new PingTestReplier(routingTable));
         sender.start();
         receiver.start();
     }
@@ -24,13 +24,16 @@ public class PingTester {
             this.routingTable = routingTable;
             socket = new BaseLayerSocket();
             socket.bind(9876);
+            
+            Thread receiver = new Thread(new PingTestReceiver());
+            receiver.start();
         }
 
         @Override
         public void run() {
             while (true) {
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(10000);
                 } catch (InterruptedException e) {
                 }
                 for (InetAddress node : routingTable.getKnownNeigborAddresses()) {
@@ -41,23 +44,28 @@ public class PingTester {
                             routingTable.getSelfAddress(), node, 9876, 6789,
                             buf.array());
                     socket.send(packet);
-
-                    SimpleDatagramPacket response = socket.receive();
-                    long timestamp = ByteBuffer.wrap(response.getPayload())
-                            .getLong();
-                    System.out.println("response from "
-                            + response.getSource().getHostAddress() + " "
-                            + (timestamp - (new Date().getTime())));
                 }
+            }
+        }
+
+        class PingTestReceiver implements Runnable {
+            @Override
+            public void run() {
+                SimpleDatagramPacket response = socket.receive();
+                long timestamp = ByteBuffer.wrap(response.getPayload())
+                        .getLong();
+                System.out.println("response from "
+                        + response.getSource().getHostAddress() + " "
+                        + ((new Date().getTime()) - timestamp));
             }
         }
     }
 
-    static class PingTestReceiver implements Runnable {
+    static class PingTestReplier implements Runnable {
         BaseLayerSocket socket;
         RoutingTable routingTable;
 
-        PingTestReceiver(RoutingTable routingTable) {
+        PingTestReplier(RoutingTable routingTable) {
             this.routingTable = routingTable;
             socket = new BaseLayerSocket();
             socket.bind(6789);

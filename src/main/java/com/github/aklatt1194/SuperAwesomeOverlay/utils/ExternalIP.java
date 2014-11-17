@@ -17,6 +17,6 @@ public class ExternalIP {
         connection.setRequestProperty("Accept-Charset", "UTF-8");
         InputStream response = connection.getInputStream();
         
-        return InetAddress.getByName(IOUtils.toString(response));
+        return InetAddress.getByName(IOUtils.toString(response).trim());
     }
 }

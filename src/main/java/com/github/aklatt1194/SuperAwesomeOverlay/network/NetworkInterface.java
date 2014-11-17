@@ -26,7 +26,7 @@ public class NetworkInterface implements Runnable {
     private static NetworkInterface instance = null;
 
     private RoutingTable routingTable;
-    private Map<InetAddress, SocketChannel> tcpLinkTable;
+    private Map<String, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
     private Map<InetAddress, SocketChannel> newSocketChannels;
 
@@ -97,7 +97,7 @@ public class NetworkInterface implements Runnable {
                 socketChannel.configureBlocking(false);
 
                 if (res) {
-                    tcpLinkTable.put(node, socketChannel);
+                    tcpLinkTable.put(node.getHostAddress(), socketChannel);
                     newSocketChannels.put(node, socketChannel);
                 }
                 selector.wakeup();
@@ -112,7 +112,9 @@ public class NetworkInterface implements Runnable {
                 if (!pendingRequests.isEmpty()) {
                     ChangeRequest request = pendingRequests.take();
                     SelectionKey key = request.socket.keyFor(selector);
-                    key.interestOps(request.ops);
+                    if (key != null) {
+                        key.interestOps(request.ops);
+                    }
                 }
 
                 // wait for an event
@@ -161,7 +163,7 @@ public class NetworkInterface implements Runnable {
         // map the remote address to this socket
         InetAddress addr = socketChannel.socket().getInetAddress();
 
-        tcpLinkTable.put(addr, socketChannel);
+        tcpLinkTable.put(addr.getHostAddress(), socketChannel);
 
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
@@ -242,11 +244,12 @@ public class NetworkInterface implements Runnable {
     protected void send(SimpleDatagramPacket packet) {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
-        SocketChannel socket = tcpLinkTable.get(packet.getDestination());
+        SocketChannel socket = tcpLinkTable.get(packet.getDestination().getHostAddress());
 
         if (socket == null) {
             // we aren't actually connected to the destination
-            // TODO
+            // TODO: 
+            return;
         }
 
         while (true) {
@@ -326,13 +329,17 @@ public class NetworkInterface implements Runnable {
                 } catch (InterruptedException e) {
                     continue;
                 }
-
+                
+                if (portMap.get(dataEvent.packet.getDestinationPort()) == null) {
+                    // this port isn't open, drop packet
+                    continue;
+                }
+                
                 BlockingQueue<SimpleDatagramPacket> readQueue = portMap
                         .get(dataEvent.packet.getDestinationPort()).readQueue;
 
                 try {
                     readQueue.put(dataEvent.packet);
-                    break;
                 } catch (InterruptedException e) {
                     continue;
                 }
