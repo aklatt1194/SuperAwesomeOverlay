@@ -51,12 +51,14 @@ public class PingTester {
         class PingTestReceiver implements Runnable {
             @Override
             public void run() {
-                SimpleDatagramPacket response = socket.receive();
-                long timestamp = ByteBuffer.wrap(response.getPayload())
-                        .getLong();
-                System.out.println("response from "
-                        + response.getSource().getHostAddress() + " "
-                        + ((new Date().getTime()) - timestamp));
+                while (true) {
+                    SimpleDatagramPacket response = socket.receive();
+                    long timestamp = ByteBuffer.wrap(response.getPayload())
+                            .getLong();
+                    System.out.println("response from "
+                            + response.getSource().getHostAddress() + " "
+                            + ((new Date().getTime()) - timestamp));
+                }
             }
         }
     }
