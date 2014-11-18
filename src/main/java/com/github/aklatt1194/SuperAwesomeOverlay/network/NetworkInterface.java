@@ -318,6 +318,9 @@ public class NetworkInterface implements Runnable {
         portMap.remove(simpleSocket);
     }
 
+    /**
+     * A thread that multiplexes incoming packets to the correct ports
+     */
     private class PacketRouter implements Runnable {
         @Override
         public void run() {

@@ -6,6 +6,8 @@ import javax.websocket.DeploymentException;
 
 import org.glassfish.tyrus.server.Server;
 
+import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseManager;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseProvider;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.ChatEndpoint;
@@ -16,6 +18,8 @@ public class Overlay {
     public static void main(String[] args) throws DeploymentException {
         // create routing table and initialize the network interface
         RoutingTable routingTable = new RoutingTable();
+        
+        DatabaseManager db = new DatabaseProvider("Metrics");
 
         try {
             NetworkInterface.getInstance().initialize(routingTable);
@@ -35,6 +39,7 @@ public class Overlay {
 
         // uncomment for extended logging
         // BasicConfigurator.configure();
-        new PingTester(routingTable);
+        
+        new PingTester(routingTable, db);
     }
 }
