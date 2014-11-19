@@ -39,18 +39,19 @@ public class OverlayRoutingManager implements Runnable {
         while (true) {
             SimpleDatagramPacket packet = socket.receive();
             TopologyUpdate upd = TopologyUpdate.deserialize(packet.getPayload());
-            model.updateTopology(packet.getSource(), upd.metrics);
+            model.updateTopology(upd.src, upd.metrics);
         }
         
         
     }
     
     private static class TopologyUpdate {
+        public InetAddress src;
+        public Map<InetAddress, Double> metrics;
+        
         public TopologyUpdate() {
             this.metrics = new HashMap<InetAddress, Double>();
         }
-        
-        public Map<InetAddress, Double> metrics;
         
         public byte[] serialize() {
             ByteBuffer buf = ByteBuffer.allocate(ROUTING_UPDATE_SIZE);

@@ -6,7 +6,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.utils.ExternalIP;
+import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class RoutingTable {
     public static final String[] NODES_BOOTSTRAP = {
@@ -22,7 +22,7 @@ public class RoutingTable {
         nodes = new ArrayList<>();
         
         try {
-            selfAddr = ExternalIP.getExternalAddress();
+            selfAddr = IPUtils.getExternalAddress();
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();

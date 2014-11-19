@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 
+import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
+
 
 public class OverlayRoutingModel {
     private RoutingTable rTbl;
@@ -93,6 +95,20 @@ public class OverlayRoutingModel {
     }
     
     /**
+     * Call this when a low layer connection to a given dest is closed. This
+     * will mark the connection as non-existent in the metric table.
+     */
+    public void closeConnection(InetAddress destAddr) {
+        int src = nodeToIndex.get(rTbl.getSelfAddress());
+        int dest = nodeToIndex.get(destAddr);
+        
+        // Do it manually since we want to trust ourselves, not necessarily the
+        // node with the lower ip address
+        metrics[src][dest] = -1.;
+        metrics[dest][src] = -1.;
+    }
+    
+    /**
      * Rebuild the matrix (i.e. do a batch update for the lazy adds and deletes)
      */
     private void rebuildMatrix() {
@@ -159,7 +175,7 @@ public class OverlayRoutingModel {
         // we need to be careful about how we update things. Whenever we do an
         // update, we need to update 2 entries (A->B and B->A). We pick which value
         // to use, by trusting the node with the smaller ip address.
-        if (knownNodes[col].getHostAddress().compareTo(knownNodes[row].getHostAddress()) < 0)
+        if (IPUtils.compareIPs(knownNodes[col], knownNodes[row]) < 0)
             value = metrics[col][row];
         
         metrics[row][col] = value;
@@ -286,7 +302,7 @@ public class OverlayRoutingModel {
 
         @Override
         public int compareTo(TreeNode t) {
-            return address.getHostAddress().compareTo(t.address.getHostAddress());
+            return IPUtils.compareIPs(this.address, t.address);
         }
     }
     
