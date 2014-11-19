@@ -10,7 +10,6 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -18,7 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
-import com.github.aklatt1194.SuperAwesomeOverlay.utils.ExternalIP;
 
 public class NetworkInterface implements Runnable {
     private static final int LINK_PORT = 3333;

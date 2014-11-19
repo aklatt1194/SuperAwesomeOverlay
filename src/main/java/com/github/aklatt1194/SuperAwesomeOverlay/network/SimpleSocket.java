@@ -42,4 +42,8 @@ public abstract class SimpleSocket {
     public void close() {
         NetworkInterface.getInstance().closeSocket(this);
     }
+    
+    public int getPort() {
+        return port;
+    }
 }

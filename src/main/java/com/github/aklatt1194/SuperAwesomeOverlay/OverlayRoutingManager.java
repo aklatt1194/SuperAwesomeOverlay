@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseManager;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.BaseLayerSocket;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 
@@ -16,9 +18,11 @@ public class OverlayRoutingManager implements Runnable {
     
     private BaseLayerSocket socket;
     private DatabaseManager db;
+    private OverlayRoutingModel model;
     
-    public OverlayRoutingManager(DatabaseManager db) {
+    public OverlayRoutingManager(RoutingTable rTbl, DatabaseManager db) {
         this.db = db;
+        this.model = new OverlayRoutingModel(rTbl);
         this.socket = new BaseLayerSocket();
         this.socket.bind(55555);
         new Thread(this).start();
@@ -26,10 +30,17 @@ public class OverlayRoutingManager implements Runnable {
 
     @Override
     public void run() {
-        
-        SimpleDatagramPacket packet = socket.receive(); 
         // TODO, upon receiving an update, we may wish to inform other nodes
-        TopologyUpdate upd = TopologyUpdate.deserialize(packet.getPayload());
+        // TODO when do we remove a node
+        // TODO periodically send out updates
+        // TODO forward these updates along?
+        // TODO TTL for these updates
+        
+        while (true) {
+            SimpleDatagramPacket packet = socket.receive();
+            TopologyUpdate upd = TopologyUpdate.deserialize(packet.getPayload());
+            model.updateTopology(packet.getSource(), upd.metrics);
+        }
         
         
     }
