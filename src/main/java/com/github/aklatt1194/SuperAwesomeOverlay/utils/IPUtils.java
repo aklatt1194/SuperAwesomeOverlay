@@ -6,6 +6,8 @@ import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 
 import spark.utils.IOUtils;
 
@@ -35,5 +37,26 @@ public class IPUtils {
         }
         
         return 0;
+    }
+    
+    public static void serializeIPAddr(InetAddress addr, ByteBuffer buf) {
+        byte[] bytes = addr.getAddress();
+        buf.putInt(bytes.length);
+        buf.put(bytes);
+    }
+    
+    public static InetAddress deserializeIPAddr(ByteBuffer buf) {
+        int len = buf.getInt();
+        byte[] bytes = new byte[len];
+        
+        for (int i = 0; i < len; i++) {
+            bytes[i] = buf.get();
+        }
+        
+        try {
+            return InetAddress.getByAddress(bytes);
+        } catch (UnknownHostException e) {
+            return null;
+        }
     }
 }

@@ -24,7 +24,6 @@ public class RoutingTable {
         try {
             selfAddr = IPUtils.getExternalAddress();
         } catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         
@@ -39,8 +38,17 @@ public class RoutingTable {
         }
     }
     
-    public List<InetAddress> getKnownNeigborAddresses() {
-        return nodes;
+    // Return a copy to avoid concurrency issues
+    public synchronized List<InetAddress> getKnownNeigborAddresses() {
+        return new ArrayList<InetAddress>(nodes);
+    }
+    
+    public synchronized void addNeighborNode(InetAddress addr) {
+        nodes.add(addr);
+    }
+    
+    public synchronized void removeNeighborNode(InetAddress addr) {
+        nodes.remove(addr);
     }
     
     public InetAddress getSelfAddress() {

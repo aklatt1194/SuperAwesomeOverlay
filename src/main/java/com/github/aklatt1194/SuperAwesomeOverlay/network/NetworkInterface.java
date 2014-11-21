@@ -26,7 +26,7 @@ public class NetworkInterface implements Runnable {
     private RoutingTable routingTable;
     private Map<String, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
-    private Map<InetAddress, SocketChannel> newSocketChannels;
+    private Map<InetAddress, SocketChannel> newSocketChannels; //TODO make synchronized and add to it from OverlayModel
 
     private ServerSocketChannel serverChannel;
     private Selector selector;

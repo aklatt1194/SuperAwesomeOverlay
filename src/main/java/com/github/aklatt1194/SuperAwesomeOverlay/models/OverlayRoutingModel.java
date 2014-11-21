@@ -12,6 +12,10 @@ import java.util.Queue;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 
+// TODO we want want to try to batch our rebuilding of the tree and forwarding table
+// perhaps after receiving an update from each other node? Not sure if this is really
+// important, but we are doing a lot of rebuilding now.
+
 public class OverlayRoutingModel {
     private RoutingTable rTbl;
     
@@ -55,11 +59,21 @@ public class OverlayRoutingModel {
         }
     }
     
+    /**
+     * Lazy insert a node. (Only call this if you are going to update right after)
+     */
+    public void addNode(InetAddress addr) {
+        nodesToAdd.add(addr);
+        rTbl.addNeighborNode(addr);
+        // TODO tell the network interface to connect to this node (add to newSocketChannels)
+        // This will probably need to be synchronized.
+    }
+    
     
     /**
-     * Lazy delete a node
+     * Lazy delete a node. (Only call this if you are going to update right after)
      */
-    public void removeNode(InetAddress addr) {
+    public void removeNodeLazy(InetAddress addr) {
         // lazy delete
         if (nodeToIndex.containsKey(addr)) {
             knownNodes[nodeToIndex.get(addr)] = null;
@@ -70,34 +84,30 @@ public class OverlayRoutingModel {
     /**
      * Update the model based on new information from the given src node
      */
-    public void updateTopology(InetAddress src, Map<InetAddress, Double> newValues) {
-        // Put a self loop of length -1 in for src
-        newValues.put(src, -1.);
-        
+    public void updateTopology(InetAddress src, Map<InetAddress, Double> newValues) {        
         // Update known nodes
         for (InetAddress addr : newValues.keySet()) {
             if (!nodeToIndex.containsKey(addr)) {
-                nodesToAdd.add(addr);
+                addNode(addr);
             }
         }
         
-        // If we need to, add nodes or remove nodes
-        if (!nodesToAdd.isEmpty() || nodeToIndex.size() != knownNodes.length) {            
-            rebuildMatrix();
-        }
+        // If we need to, add nodes or remove nodes        
+        rebuildMatrix();
         
         // Update the values in the table
         updateMetrics(src, newValues);
         
         // Rebuild the MST and the forwarding table
-        updateModel(); // TODO this seems inefficient to rebuild all of this
-                       // every time that we receive a topology update. idk.
+        updateModel();
     }
     
     /**
      * Call this when a low layer connection to a given dest is closed. This
      * will mark the connection as non-existent in the metric table.
      */
+    // TODO if our network will always be fully connected, we may just want to
+    // send out a remove node update if we cannot connect to a node...?
     public void closeConnection(InetAddress destAddr) {
         int src = nodeToIndex.get(rTbl.getSelfAddress());
         int dest = nodeToIndex.get(destAddr);
@@ -109,9 +119,30 @@ public class OverlayRoutingModel {
     }
     
     /**
-     * Rebuild the matrix (i.e. do a batch update for the lazy adds and deletes)
+     * Update values in the table without creating a new table (all nodes must be
+     * in the matrix already)
      */
-    private void rebuildMatrix() {
+    public void updateMetrics(InetAddress src, Map<InetAddress, Double> values) {
+        int row = nodeToIndex.get(src);
+        
+        // Update the metrics
+        for (int i = 0; i < metrics.length; i++) {
+            if (!values.containsKey(knownNodes[i]))
+                insertMetricTable(row, i, -1.);
+            else
+                insertMetricTable(row, i, values.get(knownNodes[i]));
+        }
+    }
+    
+    /**
+     * If necessary, rebuild the matrix (i.e. do a batch update for the lazy adds
+     * and deletes).
+     */
+    public void rebuildMatrix() {
+       // If we don't need to rebuild it, then just return
+       if(nodesToAdd.isEmpty() && nodeToIndex.size() == knownNodes.length)
+           return;
+        
         // Figure out the new number of nodes
         int newSize = 0;
         for (int i = 0; i < knownNodes.length; i++)
@@ -153,40 +184,10 @@ public class OverlayRoutingModel {
     }
     
     /**
-     * Update values in the table without creating a new table
-     */
-    private void updateMetrics(InetAddress src, Map<InetAddress, Double> values) {
-        int row = nodeToIndex.get(src);
-        
-        // Update the metrics
-        for (int i = 0; i < metrics.length; i++) {
-            if (!values.containsKey(knownNodes[i]))
-                insertMetricTable(row, i, -1.);
-            else
-                insertMetricTable(row, i, values.get(knownNodes[i]));
-        }
-    }
-    
-    /**
-     * Insert a value into the metrics table at the given location
-     */
-    private void insertMetricTable(int row, int col, double value) {
-        // Since these values are directed, but we want an undirected graph,
-        // we need to be careful about how we update things. Whenever we do an
-        // update, we need to update 2 entries (A->B and B->A). We pick which value
-        // to use, by trusting the node with the smaller ip address.
-        if (IPUtils.compareIPs(knownNodes[col], knownNodes[row]) < 0)
-            value = metrics[col][row];
-        
-        metrics[row][col] = value;
-        metrics[col][row] = value;
-    }
-    
-    /**
      *  Update the model (i.e. the tree and the forwarding table) based on the current
      *  graph (metric matrix).
      */
-    private void updateModel() {
+    public void updateModel() {
         buildMst();
         constructForwardingTable();
     }
@@ -270,6 +271,21 @@ public class OverlayRoutingModel {
         }
         
         return false;
+    }
+    
+    /**
+     * Insert a value into the metrics table at the given location
+     */
+    private void insertMetricTable(int row, int col, double value) {
+        // Since these values are directed, but we want an undirected graph,
+        // we need to be careful about how we update things. Whenever we do an
+        // update, we need to update 2 entries (A->B and B->A). We pick which value
+        // to use, by trusting the node with the smaller ip address.
+        if (IPUtils.compareIPs(knownNodes[col], knownNodes[row]) < 0)
+            value = metrics[col][row];
+        
+        metrics[row][col] = value;
+        metrics[col][row] = value;
     }
     
     
