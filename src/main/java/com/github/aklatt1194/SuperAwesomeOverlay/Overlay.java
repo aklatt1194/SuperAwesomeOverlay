@@ -11,6 +11,7 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseProvider;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.ChatEndpoint;
+import com.github.aklatt1194.SuperAwesomeOverlay.views.MetricsEndpoints;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.RoutingTableEndpoint;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.WebRoutes;
 
@@ -31,6 +32,7 @@ public class Overlay {
         // web routes and endpoints
         new WebRoutes();
         new RoutingTableEndpoint(routingTable);
+        new MetricsEndpoints(db, routingTable);
 
         // websockets
         Server server = new Server("localhost", 8025, "/endpoints", null,

@@ -10,7 +10,7 @@ import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class RoutingTable {
     public static final String[] NODES_BOOTSTRAP = {
-        "sidney.duckdns.org",  // for testing purposes
+        "c-174-61-223-52.hsd1.wa.comcast.net",  // for testing purposes
         "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com",
         "ec2-54-64-177-145.ap-northeast-1.compute.amazonaws.com",
         "ec2-54-172-69-181.compute-1.amazonaws.com"};
