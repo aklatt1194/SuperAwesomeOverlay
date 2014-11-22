@@ -1,12 +1,9 @@
 package com.github.aklatt1194.SuperAwesomeOverlay.network;
 
 import java.net.SocketException;
-import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-
-import com.sun.xml.internal.ws.api.message.Packet;
 
 public abstract class SimpleSocket {
     protected BlockingQueue<SimpleDatagramPacket> readQueue;
