@@ -54,8 +54,4 @@ public class RoutingTable {
     public InetAddress getSelfAddress() {
         return selfAddr;
     }
-    
-    static class Node {
-        
-    }
 }

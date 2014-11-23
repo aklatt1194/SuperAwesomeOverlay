@@ -2,6 +2,7 @@ package com.github.aklatt1194.SuperAwesomeOverlay.models;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -190,6 +191,36 @@ public class OverlayRoutingModel {
     public void updateModel() {
         buildMst();
         constructForwardingTable();
+    }
+    
+    /**
+     * MST getter. Normally a deep copy would be a good idea.
+     */
+    public synchronized TreeNode getMST() {
+        return root;
+    }
+    
+    /**
+     * Known Node getter. Returns an array of all the nodes.
+     */
+    public synchronized List<InetAddress> getKnownNodes() {
+        return new ArrayList<InetAddress>(Arrays.asList(knownNodes));
+    }
+    
+    /**
+     * Known Neighbors getter. Returns an array of all the nodes except self.
+     */
+    public synchronized List<InetAddress> getKnownNeighbors() {
+        InetAddress self = rTbl.getSelfAddress();
+        List<InetAddress> result = new ArrayList<>();
+        
+        for (InetAddress addr : knownNodes) {
+            if (addr != self) {
+                result.add(addr);
+            }
+        }
+
+        return result;
     }
     
     /**

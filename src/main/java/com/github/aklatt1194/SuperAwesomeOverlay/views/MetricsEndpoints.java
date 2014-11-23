@@ -10,15 +10,15 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
-import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class MetricsEndpoints {
     private MetricsDatabaseManager db;
-    private RoutingTable rtbl;
+    private OverlayRoutingModel model;
 
-    public MetricsEndpoints(MetricsDatabaseManager db, RoutingTable rtbl) {
+    public MetricsEndpoints(MetricsDatabaseManager db, OverlayRoutingModel model) {
         this.db = db;
-        this.rtbl = rtbl;
+        this.model = model;
 
         get("/endpoints/latency/:start/:end",
                 (req, res) -> {
@@ -32,7 +32,7 @@ public class MetricsEndpoints {
     private List<NodeMetrics> lookupLatencies(long startTime, long endTime) {
         List<NodeMetrics> response = new ArrayList<>();
 
-        for (InetAddress node : rtbl.getKnownNeigborAddresses()) {
+        for (InetAddress node : model.getKnownNeighbors()) {
             NodeMetrics nodeMetrics = new NodeMetrics(node.getHostAddress());
             Map<Long, Double> latencies = db.getLatencyData(nodeMetrics.name,
                     startTime, endTime);
