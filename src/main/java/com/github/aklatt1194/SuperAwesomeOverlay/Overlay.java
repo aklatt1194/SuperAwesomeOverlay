@@ -6,7 +6,7 @@ import javax.websocket.DeploymentException;
 
 import org.glassfish.tyrus.server.Server;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseProvider;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseProvider;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
@@ -24,7 +24,7 @@ public class Overlay {
         RoutingTable routingTable = new RoutingTable();
         OverlayRoutingModel overlayRoutingModel = new OverlayRoutingModel(routingTable);
         
-        MetricsDatabaseManager metricsdb = new DatabaseProvider("Metrics");
+        MetricsDatabaseManager metricsdb = new MetricsDatabaseProvider("Metrics");
         GeolocateDatabaseProvider geodb = new GeolocateDatabaseProvider(); 
 
         try {

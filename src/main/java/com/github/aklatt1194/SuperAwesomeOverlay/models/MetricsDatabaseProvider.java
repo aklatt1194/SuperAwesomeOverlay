@@ -4,7 +4,7 @@ import java.sql.*;
 import java.util.Map;
 import java.util.TreeMap;
 
-public class DatabaseProvider implements MetricsDatabaseManager {
+public class MetricsDatabaseProvider implements MetricsDatabaseManager {
 
     private static final String DEFAULT_NAME = "sqlite-test.db";
     private static final String LATENCY_TABLE = "latency";
@@ -16,14 +16,14 @@ public class DatabaseProvider implements MetricsDatabaseManager {
     /**
      * Setup a connection and construct a default test database if necessary
      */
-    public DatabaseProvider() {
+    public MetricsDatabaseProvider() {
         this("");
     }
 
     /**
      * Setup the connection and construct the db and tables if necessary
      */
-    public DatabaseProvider(String name) {
+    public MetricsDatabaseProvider(String name) {
         String path = name.length() == 0 ? DEFAULT_NAME : PATH + name;
         try {
             // Open a connection to the DB (creates the DB if it does not exist)
