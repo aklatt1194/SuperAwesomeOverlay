@@ -59,7 +59,7 @@ public class OverlayRoutingModel {
     /**
      * Lazy insert a node. (Only call this if you are going to update right after)
      */
-    public void addNode(InetAddress addr) {
+    public synchronized void addNode(InetAddress addr) {
         nodesToAdd.add(addr);
         // TODO tell the network interface to connect to this node (add to newSocketChannels)
         // This will probably need to be synchronized.
@@ -69,7 +69,7 @@ public class OverlayRoutingModel {
     /**
      * Lazy delete a node. (Only call this if you are going to update right after)
      */
-    public void removeNodeLazy(InetAddress addr) {
+    public synchronized void removeNodeLazy(InetAddress addr) {
         // lazy delete
         if (nodeToIndex.containsKey(addr)) {
             knownNodes[nodeToIndex.get(addr)] = null;
@@ -80,7 +80,7 @@ public class OverlayRoutingModel {
     /**
      * Update the model based on new information from the given src node
      */
-    public void updateTopology(InetAddress src, Map<InetAddress, Double> newValues) {        
+    public synchronized void updateTopology(InetAddress src, Map<InetAddress, Double> newValues) {        
         // Update known nodes
         for (InetAddress addr : newValues.keySet()) {
             if (!nodeToIndex.containsKey(addr)) {
@@ -134,7 +134,7 @@ public class OverlayRoutingModel {
      * If necessary, rebuild the matrix (i.e. do a batch update for the lazy adds
      * and deletes).
      */
-    public void rebuildMatrix() {
+    public synchronized void rebuildMatrix() {
        // If we don't need to rebuild it, then just return
        if(nodesToAdd.isEmpty() && nodeToIndex.size() == knownNodes.length)
            return;
