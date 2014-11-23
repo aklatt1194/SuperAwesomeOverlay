@@ -2,7 +2,7 @@ package com.github.aklatt1194.SuperAwesomeOverlay.models;
 
 import java.util.Map;
 
-public interface DatabaseManager {
+public interface MetricsDatabaseManager {
 
     /**
      * Add the given latency value for the connection to the given node at the

@@ -6,8 +6,9 @@ import javax.websocket.DeploymentException;
 
 import org.glassfish.tyrus.server.Server;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseProvider;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.ChatEndpoint;
@@ -20,7 +21,8 @@ public class Overlay {
         // create routing table and initialize the network interface
         RoutingTable routingTable = new RoutingTable();
         
-        DatabaseManager db = new DatabaseProvider("Metrics");
+        MetricsDatabaseManager metricsdb = new DatabaseProvider("Metrics");
+        GeolocateDatabaseProvider geodb = new GeolocateDatabaseProvider(); 
 
         try {
             NetworkInterface.getInstance().initialize(routingTable);
@@ -31,8 +33,8 @@ public class Overlay {
 
         // web routes and endpoints
         new WebRoutes();
-        new RoutingTableEndpoint(routingTable);
-        new MetricsEndpoints(db, routingTable);
+        new RoutingTableEndpoint(geodb, routingTable);
+        new MetricsEndpoints(metricsdb, routingTable);
 
         // websockets
         Server server = new Server("localhost", 8025, "/endpoints", null,
@@ -42,6 +44,6 @@ public class Overlay {
         // uncomment for extended logging
         // BasicConfigurator.configure();
         
-        new PingTester(routingTable, db);
+        new PingTester(routingTable, metricsdb);
     }
 }

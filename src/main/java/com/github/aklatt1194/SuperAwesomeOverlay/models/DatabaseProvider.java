@@ -4,7 +4,7 @@ import java.sql.*;
 import java.util.Map;
 import java.util.TreeMap;
 
-public class DatabaseProvider implements DatabaseManager {
+public class DatabaseProvider implements MetricsDatabaseManager {
 
     private static final String DEFAULT_NAME = "sqlite-test.db";
     private static final String LATENCY_TABLE = "latency";

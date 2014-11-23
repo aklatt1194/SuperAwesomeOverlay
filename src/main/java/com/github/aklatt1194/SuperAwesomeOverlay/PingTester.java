@@ -4,13 +4,13 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Date;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseManager;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.BaseLayerSocket;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 
 public class PingTester {
-    public PingTester(RoutingTable routingTable, DatabaseManager dbManager) {
+    public PingTester(RoutingTable routingTable, MetricsDatabaseManager dbManager) {
         Thread sender = new Thread(new PingTestSender(routingTable, dbManager));
         Thread receiver = new Thread(new PingTestReplier(routingTable));
         sender.start();
@@ -21,7 +21,7 @@ public class PingTester {
         BaseLayerSocket socket;
         RoutingTable routingTable;
 
-        PingTestSender(RoutingTable routingTable, DatabaseManager dbManager) {
+        PingTestSender(RoutingTable routingTable, MetricsDatabaseManager dbManager) {
             this.routingTable = routingTable;
             socket = new BaseLayerSocket();
             socket.bind(9876);
@@ -50,8 +50,8 @@ public class PingTester {
         }
 
         class PingTestReceiver implements Runnable {
-            private DatabaseManager dbManager;
-            public PingTestReceiver(DatabaseManager dbManager) {
+            private MetricsDatabaseManager dbManager;
+            public PingTestReceiver(MetricsDatabaseManager dbManager) {
                 this.dbManager = dbManager;
             }
             

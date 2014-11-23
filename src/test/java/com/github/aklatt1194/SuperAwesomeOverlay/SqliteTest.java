@@ -37,7 +37,7 @@ public class SqliteTest extends TestCase {
         String node1 = "Node1";
         String node2 = "Node2";
 
-        DatabaseManager dbManager = new DatabaseProvider();
+        MetricsDatabaseManager dbManager = new DatabaseProvider();
         dbManager.addThroughputData(node1, System.currentTimeMillis(),
                 rand.nextDouble() * 100);
         dbManager.addLatencyData(node2, System.currentTimeMillis(),

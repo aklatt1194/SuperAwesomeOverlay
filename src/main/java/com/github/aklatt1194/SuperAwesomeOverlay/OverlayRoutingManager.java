@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.models.DatabaseManager;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.BaseLayerSocket;
@@ -20,11 +20,11 @@ public class OverlayRoutingManager implements Runnable {
     public static final long METRIC_AVERAGE_PERIOD = 60000 * 5; // 5 min
     
     private BaseLayerSocket socket;
-    private DatabaseManager db;
+    private MetricsDatabaseManager db;
     private OverlayRoutingModel model;
     private RoutingTable rTbl;
     
-    public OverlayRoutingManager(RoutingTable rTbl, DatabaseManager db) {
+    public OverlayRoutingManager(RoutingTable rTbl, MetricsDatabaseManager db) {
         this.db = db;
         this.model = new OverlayRoutingModel(rTbl);
         this.socket = new BaseLayerSocket();
