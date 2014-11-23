@@ -1,6 +1,5 @@
 package com.github.aklatt1194.SuperAwesomeOverlay;
 
-
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -8,7 +7,6 @@ import java.util.Map;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
-import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.BaseLayerSocket;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
@@ -22,14 +20,12 @@ public class OverlayRoutingManager implements Runnable {
     private BaseLayerSocket socket;
     private MetricsDatabaseManager db;
     private OverlayRoutingModel model;
-    private RoutingTable rTbl;
     
-    public OverlayRoutingManager(RoutingTable rTbl, MetricsDatabaseManager db) {
+    public OverlayRoutingManager(OverlayRoutingModel model, MetricsDatabaseManager db) {
         this.db = db;
-        this.model = new OverlayRoutingModel(rTbl);
+        this.model = model;
         this.socket = new BaseLayerSocket();
         this.socket.bind(PORT);
-        this.rTbl = rTbl;
         new Thread(this).start();
     }
 
@@ -48,7 +44,7 @@ public class OverlayRoutingManager implements Runnable {
                 model.updateTopology(upd.src, upd.metrics);
                 
                 // Send it to all of our neighbors
-                for (InetAddress dst : rTbl.getKnownNeigborAddresses()) {
+                for (InetAddress dst : model.getKnownNeighbors()) {
                     SimpleDatagramPacket packet = new SimpleDatagramPacket(upd.src, 
                             dst, PORT, PORT, upd.serialize());
                     socket.send(packet);
@@ -72,11 +68,11 @@ public class OverlayRoutingManager implements Runnable {
         TopologyUpdate upd = new TopologyUpdate();
         
         // Add the src
-        upd.src = rTbl.getSelfAddress();
+        upd.src = model.getSelfAddress();
         upd.metrics.put(upd.src, -1.);
         
         long time = System.currentTimeMillis();
-        for (InetAddress addr : rTbl.getKnownNeigborAddresses()) {
+        for (InetAddress addr : model.getKnownNeighbors()) {
             String node = addr.getHostAddress();
             
             Map<Long, Double> latencies = db.getLatencyData(node, 

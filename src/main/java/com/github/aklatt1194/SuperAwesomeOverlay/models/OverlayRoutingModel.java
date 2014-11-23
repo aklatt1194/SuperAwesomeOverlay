@@ -1,5 +1,6 @@
 package com.github.aklatt1194.SuperAwesomeOverlay.models;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,35 +19,30 @@ import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 // important, but we are doing a lot of rebuilding now.
 
 public class OverlayRoutingModel {
-    private RoutingTable rTbl;
-    
     // Used for managing the matrix of metrics
     private Queue<InetAddress> nodesToAdd;
     private Map<InetAddress, Integer> nodeToIndex;
     private InetAddress[] knownNodes;
+    private InetAddress selfAddress;
     private double[][] metrics;
     
     // Models
     private TreeNode root;
     private Map<InetAddress, InetAddress> fTable;
     
-    public OverlayRoutingModel(RoutingTable rTbl) {
-        this.rTbl = rTbl;
-        
-        // Get the neighbors and use them to populate the table initially
-        List<InetAddress> neighbors = rTbl.getKnownNeigborAddresses();
-        
-        // Populate the known nodes
-        nodeToIndex = new HashMap<InetAddress, Integer>();
-        knownNodes = new InetAddress[neighbors.size() + 1];
-        knownNodes[0] = rTbl.getSelfAddress(); // Put ourselves in
-        nodeToIndex.put(knownNodes[0], 0); // Put ourselves in
-        
-        // Put our neighbors in
-        for (int i = 0; i < neighbors.size(); i++) {
-            nodeToIndex.put(neighbors.get(i), i + 1);
-            knownNodes[i + 1] = neighbors.get(i);
+    public OverlayRoutingModel() {        
+        // figure out external ip
+        try {
+            selfAddress = IPUtils.getExternalAddress(); // Put ourselves in
+        } catch (IOException e) {
+            System.err.println("Error: Unable to determine external IP address");
+            System.exit(1);
         }
+        
+        // Initially, we are the only known node 
+        nodeToIndex = new HashMap<InetAddress, Integer>();
+        knownNodes = new InetAddress[]{selfAddress};
+        nodeToIndex.put(selfAddress, 0);
         
         nodesToAdd = new LinkedList<InetAddress>();
         
@@ -65,7 +61,6 @@ public class OverlayRoutingModel {
      */
     public void addNode(InetAddress addr) {
         nodesToAdd.add(addr);
-        rTbl.addNeighborNode(addr);
         // TODO tell the network interface to connect to this node (add to newSocketChannels)
         // This will probably need to be synchronized.
     }
@@ -110,7 +105,7 @@ public class OverlayRoutingModel {
     // TODO if our network will always be fully connected, we may just want to
     // send out a remove node update if we cannot connect to a node...?
     public void closeConnection(InetAddress destAddr) {
-        int src = nodeToIndex.get(rTbl.getSelfAddress());
+        int src = nodeToIndex.get(selfAddress);
         int dest = nodeToIndex.get(destAddr);
         
         // Do it manually since we want to trust ourselves, not necessarily the
@@ -211,16 +206,19 @@ public class OverlayRoutingModel {
      * Known Neighbors getter. Returns an array of all the nodes except self.
      */
     public synchronized List<InetAddress> getKnownNeighbors() {
-        InetAddress self = rTbl.getSelfAddress();
         List<InetAddress> result = new ArrayList<>();
         
         for (InetAddress addr : knownNodes) {
-            if (addr != self) {
+            if (addr != selfAddress) {
                 result.add(addr);
             }
         }
 
         return result;
+    }
+    
+    public synchronized InetAddress getSelfAddress() {
+        return selfAddress;
     }
     
     /**
@@ -231,8 +229,8 @@ public class OverlayRoutingModel {
         Queue<Edge> edges = new PriorityQueue<Edge>();
         
         // Initialize with ourself
-        InetAddress addr = rTbl.getSelfAddress();
-        TreeNode node = new TreeNode(addr);
+        InetAddress addr;
+        TreeNode node = new TreeNode(selfAddress);
         edges.add(new Edge(node, node, 1.));
         
         // While there are more edges in the queue, examine them one at a time
@@ -264,7 +262,7 @@ public class OverlayRoutingModel {
         
         } while (!edges.isEmpty());
         
-        this.root = nodesInTree.get(rTbl.getSelfAddress());
+        this.root = nodesInTree.get(selfAddress);
     }
     
     /**

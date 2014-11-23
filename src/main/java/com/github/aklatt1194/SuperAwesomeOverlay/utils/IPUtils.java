@@ -25,15 +25,15 @@ public class IPUtils {
     public static int compareIPs(InetAddress one, InetAddress two) {
         byte[] oneBytes = one.getAddress();
         byte[] twoBytes = two.getAddress();
-        
-        // Longer address is greater
+                
+        // Longer address is greater -- TODO: shouldn't they always be the same length?
         if (oneBytes.length != twoBytes.length)
             return oneBytes.length - twoBytes.length;
         
         // Otherwise compare byte by byte
         for (int i = 0; i < oneBytes.length; i++) {
             if (oneBytes[i] != twoBytes[i])
-                return oneBytes[i] = twoBytes[i];
+                return oneBytes[i] - twoBytes[i];
         }
         
         return 0;

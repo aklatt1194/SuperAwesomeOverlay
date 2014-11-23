@@ -16,14 +16,20 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
+import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class NetworkInterface implements Runnable {
+    public static final String[] NODES_BOOTSTRAP = {
+        "c-174-61-223-52.hsd1.wa.comcast.net",  // for testing purposes
+        "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com",
+        "ec2-54-64-177-145.ap-northeast-1.compute.amazonaws.com",
+        "ec2-54-172-69-181.compute-1.amazonaws.com"};
     private static final int LINK_PORT = 3333;
 
     private static NetworkInterface instance = null;
 
-    private RoutingTable routingTable;
+    private OverlayRoutingModel model;
     private Map<String, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
     private Map<InetAddress, SocketChannel> newSocketChannels; //TODO make synchronized and add to it from OverlayModel
@@ -46,8 +52,8 @@ public class NetworkInterface implements Runnable {
     private NetworkInterface() {
     }
 
-    public void initialize(RoutingTable routingTable) throws IOException {
-        this.routingTable = routingTable;
+    public void initialize(OverlayRoutingModel model) throws IOException {
+        this.model = model;
         tcpLinkTable = new ConcurrentHashMap<>();
         portMap = new ConcurrentHashMap<>();
         newSocketChannels = new ConcurrentHashMap<>();
@@ -66,6 +72,41 @@ public class NetworkInterface implements Runnable {
 
         serverChannel.socket().bind(isa);
         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+        
+
+        // try to connect to each of the bootstrap nodes
+        Selector connectSelector = SelectorProvider.provider().openSelector();
+        for (String node : NODES_BOOTSTRAP) {
+            InetAddress addr = InetAddress.getByName(node);
+            
+            if (IPUtils.compareIPs(addr, model.getSelfAddress()) != 0) {
+                SocketChannel socketChannel = SocketChannel.open();
+                socketChannel.configureBlocking(false);
+            
+                socketChannel.connect(new InetSocketAddress(addr, LINK_PORT));
+                socketChannel.register(connectSelector, SelectionKey.OP_CONNECT);
+            }
+        }
+        
+        // finish connecting to connectable nodes, giveup after 1000 ms 
+        for (int i = 0; i < NODES_BOOTSTRAP.length && connectSelector.select(1000) > 0; i++) {
+            for (SelectionKey key : connectSelector.selectedKeys()) {
+                SocketChannel channel = (SocketChannel) key.channel();
+                
+                if (key.isConnectable()) {
+                    if (channel.isConnectionPending()) {
+                        channel.finishConnect();
+                        
+                        // add this address to the model
+                        model.addNode(channel.socket().getInetAddress());
+                    }
+                }
+            }
+        }
+        connectSelector.close();
+        
+        // now that we have added all of the connectable addresses, update model
+        model.updateModel();
 
         // start the main thread
         Thread thread = new Thread(this);
@@ -74,33 +115,6 @@ public class NetworkInterface implements Runnable {
         // start up the packet router
         thread = new Thread(new PacketRouter());
         thread.start();
-
-        // We need to do something clever here. All the nodes should be up
-        // before we try to connect.
-        try {
-            Thread.sleep(10000);
-        } catch (InterruptedException e) {
-        }
-
-        // figure out the external facing ip address, it is not the same as
-        // the internal AWS one
-        for (InetAddress node : routingTable.getKnownNeigborAddresses()) {
-            if (node.getHostAddress().compareTo(
-                    routingTable.getSelfAddress().getHostAddress()) > 0) {
-                // for each node with hash < than this node, establish a
-                // connection and stick it in the table
-                SocketChannel socketChannel = SocketChannel.open();
-                boolean res = socketChannel.connect(new InetSocketAddress(node,
-                        LINK_PORT));
-                socketChannel.configureBlocking(false);
-
-                if (res) {
-                    tcpLinkTable.put(node.getHostAddress(), socketChannel);
-                    newSocketChannels.put(node, socketChannel);
-                }
-                selector.wakeup();
-            }
-        }
     }
 
     @Override
@@ -160,8 +174,11 @@ public class NetworkInterface implements Runnable {
 
         // map the remote address to this socket
         InetAddress addr = socketChannel.socket().getInetAddress();
-
         tcpLinkTable.put(addr.getHostAddress(), socketChannel);
+        
+        // add this newly connected node to model
+        model.addNode(addr);
+        model.updateModel();
 
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
@@ -210,7 +227,7 @@ public class NetworkInterface implements Runnable {
         while (true) {
             SimpleDatagramPacket packet = SimpleDatagramPacket
                     .createFromBuffer(totalBytes, socketChannel.socket()
-                            .getInetAddress(), routingTable.getSelfAddress());
+                            .getInetAddress(), model.getSelfAddress());
 
             if (packet == null) {
                 if (totalBytes.remaining() > 0) {
