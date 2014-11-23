@@ -207,6 +207,7 @@ public class NetworkInterface implements Runnable {
 
         // add this newly connected node to model
         model.addNode(addr);
+        model.rebuildMatrix();
         model.updateModel();
 
         // set selector to notify when data is to be read
