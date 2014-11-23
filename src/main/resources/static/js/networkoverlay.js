@@ -6,6 +6,9 @@ SAO.setup = function() {
 
   $.get('endpoints/known_nodes', function(data) {
     SAO.setNodeNavigation(data);
+    if (SAO.networkMap) {
+      SAO.networkMap.drawNodes(data);
+    }
   });
 };
 
@@ -25,9 +28,6 @@ SAO.setNodeNavigation = function(nodes) {
       $('.dropdown-menu').append($('<li></li>').append($('<a></a>').html(location_string).attr('href', 'http://' + nodes[i].hostname + window.location.pathname)));
     }
   }
-
-  if (SAO.networkMap)
-    SAO.networkMap.drawNodes(nodes);
 };
 
 SAO.chat = function() {

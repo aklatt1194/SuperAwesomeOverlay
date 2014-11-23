@@ -21,7 +21,7 @@ public class MetricsEndpoints {
         this.rtbl = rtbl;
         
         // set known nodes JSON endpoint
-        get("/endpoints/metrics-latency/:start/:end", (req, res) -> {
+        get("/endpoints/latency/:start/:end", (req, res) -> {
             res.type("application/json");
             return lookupLatencies(Long.parseLong(req.params("start")), Long.parseLong(req.params("end")));
         }, json());
