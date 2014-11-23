@@ -92,6 +92,13 @@ public class NetworkInterface implements Runnable {
             }
         }
 
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
         // finish connecting to connectable nodes, giveup after 1000 ms
         for (int i = 0; i < NODES_BOOTSTRAP.length
                 && connectSelector.select(1000) > 0; i++) {
@@ -100,10 +107,16 @@ public class NetworkInterface implements Runnable {
 
                 if (key.isConnectable()) {
                     if (channel.isConnectionPending()) {
-                        channel.finishConnect();
-
-                        // add this address to the model
-                        model.addNode(channel.socket().getInetAddress());
+                        try {
+                            channel.finishConnect();
+                            // we are now connected
+                            model.addNode(channel.socket().getInetAddress());
+                            channel.register(selector, SelectionKey.OP_READ);
+                            tcpLinkTable.put(channel.socket().getInetAddress()
+                                    .getHostAddress(), channel);
+                        } catch (Exception e) {
+                            // connection failed
+                        }
                     }
                 }
             }
