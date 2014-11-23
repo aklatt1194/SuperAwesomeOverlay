@@ -13,8 +13,9 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.RoutingTable;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.ChatEndpoint;
+import com.github.aklatt1194.SuperAwesomeOverlay.views.KnownNodesEndpoint;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.MetricsEndpoints;
-import com.github.aklatt1194.SuperAwesomeOverlay.views.RoutingTableEndpoint;
+import com.github.aklatt1194.SuperAwesomeOverlay.views.NetworkTopologyEndpoint;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.WebRoutes;
 
 public class Overlay {
@@ -35,7 +36,8 @@ public class Overlay {
 
         // web routes and endpoints
         new WebRoutes();
-        new RoutingTableEndpoint(geodb, overlayRoutingModel);
+        new KnownNodesEndpoint(geodb, overlayRoutingModel);
+        new NetworkTopologyEndpoint(geodb, overlayRoutingModel);
         new MetricsEndpoints(metricsdb, overlayRoutingModel);
 
         // websockets

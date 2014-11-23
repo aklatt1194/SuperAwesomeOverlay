@@ -10,23 +10,20 @@ import java.util.List;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
-public class RoutingTableEndpoint {
+public class NetworkTopologyEndpoint {
+
     private GeolocateDatabaseProvider db;
     private OverlayRoutingModel model;
 
-    public RoutingTableEndpoint(GeolocateDatabaseProvider db, OverlayRoutingModel model) {
+    public NetworkTopologyEndpoint(GeolocateDatabaseProvider db,
+            OverlayRoutingModel model) {
         this.model = model;
         this.db = db;
 
         // set known nodes JSON endpoint
-        get("/endpoints/known_nodes", (req, res) -> {
+        get("/endpoints/network_toplogy", (req, res) -> {
             res.type("application/json");
             return lookupKnownNodes();
-        }, json());
-        
-        get("/endpoints/spanning_tree", (req, res) -> {
-            res.type("application/json");
-            return getSpanningTree();
         }, json());
     }
 
@@ -39,11 +36,11 @@ public class RoutingTableEndpoint {
 
         return result;
     }
-    
+
     private ResultNode getSpanningTree() {
         return null;
     }
-    
+
     private static class ResultNode {
         private List<ResultNode> children;
         private String ip;
