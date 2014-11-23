@@ -123,10 +123,6 @@ public class NetworkInterface implements Runnable {
         }
         connectSelector.close();
 
-        // now that we have added all of the connectable addresses, update model
-        model.rebuildMatrix();
-        model.updateModel();
-
         // start the main thread
         Thread thread = new Thread(this);
         thread.start();
@@ -207,8 +203,6 @@ public class NetworkInterface implements Runnable {
 
         // add this newly connected node to model
         model.addNode(addr);
-        model.rebuildMatrix();
-        model.updateModel();
 
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);

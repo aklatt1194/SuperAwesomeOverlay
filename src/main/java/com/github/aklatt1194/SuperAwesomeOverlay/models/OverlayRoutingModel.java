@@ -196,10 +196,13 @@ public class OverlayRoutingModel {
     }
     
     /**
-     * Known Node getter. Returns an array of all the nodes.
+     * Known Node getter. Returns an array of all the nodes including any that are pending.
      */
     public synchronized List<InetAddress> getKnownNodes() {
-        return new ArrayList<InetAddress>(Arrays.asList(knownNodes));
+        List<InetAddress> result = new ArrayList<>(Arrays.asList(knownNodes));
+        result.addAll(nodesToAdd);
+        
+        return result; 
     }
     
     /**
@@ -213,7 +216,8 @@ public class OverlayRoutingModel {
                 result.add(addr);
             }
         }
-
+        result.addAll(nodesToAdd);
+        
         return result;
     }
     
