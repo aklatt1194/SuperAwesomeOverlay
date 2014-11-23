@@ -91,12 +91,12 @@ public class GeolocateDatabaseProvider {
 
     @SuppressWarnings("unused")
     public static class GeoIPEntry {
-        private String hostname;
-        private String ip;
-        private String country;
-        private String region_name;
-        private String city_name;
-        private double lat;
-        private double lon;
+        public String hostname;
+        public String ip;
+        public String country;
+        public String region_name;
+        public String city_name;
+        public double lat;
+        public double lon;
     }
 }

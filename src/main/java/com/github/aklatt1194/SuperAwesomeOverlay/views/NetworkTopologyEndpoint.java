@@ -3,12 +3,13 @@ package com.github.aklatt1194.SuperAwesomeOverlay.views;
 import static com.github.aklatt1194.SuperAwesomeOverlay.utils.JsonUtil.json;
 import static spark.Spark.get;
 
-import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider.GeoIPEntry;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel.TreeNode;
 
 public class NetworkTopologyEndpoint {
 
@@ -21,26 +22,32 @@ public class NetworkTopologyEndpoint {
         this.db = db;
 
         // set known nodes JSON endpoint
-        get("/endpoints/network_toplogy", (req, res) -> {
+        get("/endpoints/network_topology", (req, res) -> {
             res.type("application/json");
-            return lookupKnownNodes();
+            return buildSpanningTree(model.getMST());
         }, json());
     }
 
-    private List<GeolocateDatabaseProvider.GeoIPEntry> lookupKnownNodes() {
-        List<GeolocateDatabaseProvider.GeoIPEntry> result = new ArrayList<>();
-
-        for (InetAddress addr : model.getKnownNodes()) {
-            result.add(db.lookupNode(addr));
+    private ResultNode buildSpanningTree(TreeNode root) {
+        ResultNode node = new ResultNode();
+        GeoIPEntry geoEntry = db.lookupNode(root.address);
+        
+        node.ip = root.address.getHostAddress();
+        node.lat = geoEntry.lat;
+        node.lon = geoEntry.lon;
+        
+        if (!root.children.isEmpty()) {
+            node.children = new ArrayList<>();
         }
-
-        return result;
+        
+        for (TreeNode child : root.children) {
+            node.children.add(buildSpanningTree(child));
+        }
+        
+        return node;
     }
 
-    private ResultNode getSpanningTree() {
-        return null;
-    }
-
+    @SuppressWarnings("unused")
     private static class ResultNode {
         private List<ResultNode> children;
         private String ip;
