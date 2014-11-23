@@ -89,7 +89,6 @@ public class GeolocateDatabaseProvider {
         return entry;
     }
 
-    @SuppressWarnings("unused")
     public static class GeoIPEntry {
         public String hostname;
         public String ip;

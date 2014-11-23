@@ -123,7 +123,9 @@ public class OverlayRoutingManager implements Runnable {
                 IPUtils.serializeIPAddr(addr, buf);
                 buf.putDouble(metrics.get(addr));
             }
-            byte[] result = new byte[buf.position() + 1];
+            byte[] result = new byte[buf.position()];
+            
+            buf.flip();
             buf.get(result);
             return result;
         }

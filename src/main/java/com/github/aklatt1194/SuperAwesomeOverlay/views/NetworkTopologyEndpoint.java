@@ -12,13 +12,10 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel.TreeNode;
 
 public class NetworkTopologyEndpoint {
-
     private GeolocateDatabaseProvider db;
-    private OverlayRoutingModel model;
 
     public NetworkTopologyEndpoint(GeolocateDatabaseProvider db,
             OverlayRoutingModel model) {
-        this.model = model;
         this.db = db;
 
         // set known nodes JSON endpoint
