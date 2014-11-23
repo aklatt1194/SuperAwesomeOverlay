@@ -32,7 +32,7 @@ public class Overlay {
             System.exit(1);
         }
         
-        OverlayRoutingManager overlayRoutingManager = new OverlayRoutingManager(overlayRoutingModel, metricsdb);
+        //OverlayRoutingManager overlayRoutingManager = new OverlayRoutingManager(overlayRoutingModel, metricsdb);
 
         // web routes and endpoints
         new WebRoutes();
