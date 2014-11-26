@@ -11,14 +11,15 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 
+import com.github.aklatt1194.SuperAwesomeOverlay.OverlayRoutingManager.TopologyUpdate;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
-// TODO we want want to try to batch our rebuilding of the tree and forwarding table
-// perhaps after receiving an update from each other node? Not sure if this is really
-// important, but we are doing a lot of rebuilding now.
-
 public class OverlayRoutingModel {
+    
+    public static final int DEFAULT_METRIC = 1000;
+    
     // Used for managing the matrix of metrics
+    private Queue<TopologyUpdate> pendingUpdates;
     private Queue<InetAddress> nodesToAdd;
     private Map<InetAddress, Integer> nodeToIndex;
     private InetAddress[] knownNodes;
@@ -44,16 +45,65 @@ public class OverlayRoutingModel {
         knownNodes = new InetAddress[] { selfAddress };
         nodeToIndex.put(selfAddress, 0);
 
+        pendingUpdates = new LinkedList<TopologyUpdate>();
         nodesToAdd = new LinkedList<InetAddress>();
 
         metrics = new double[nodeToIndex.size()][nodeToIndex.size()];
 
-        // Fill metrics with non-existent links to start
+        // Fill metrics with default values to start
         for (int i = 0; i < metrics.length; i++) {
             for (int j = 0; j < metrics.length; j++) {
-                metrics[i][j] = -1.;
+                metrics[i][j] = DEFAULT_METRIC;
             }
         }
+    }
+    
+    /**
+     * The lazy update method used for each link state packet
+     */
+    public synchronized void recordLinkStateInformation(TopologyUpdate update) {
+        Map<InetAddress, Double> newValues = update.metrics;
+        // Update known nodes let addNode take care of preventing duplicates
+        for (InetAddress addr : newValues.keySet()) {
+            if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
+                // TODO have networkinterface connect to the new node and then
+                // if it is successful call addNode
+            }
+        }
+        
+        // TODO we could get rid of this whole loop and remove nodes who don't
+        // respond to ls updates instead
+        for (InetAddress known : nodeToIndex.keySet()) {
+            if (!newValues.containsKey(known)) {
+                // TODO check the health of the connection
+                // but don't call removeNode here!!!!!!
+                // we need an even lazier delete
+            }
+        }
+        
+        pendingUpdates.add(update);
+    }
+    
+    /**
+     * Trigger all of the batched link state updates to rebuild the model
+     */
+    public synchronized void triggerFullUpdate() {
+        // TODO do some explicit deletes here (i.e. call removeNode on nodes
+        // that we have determined are unresponsive)?
+        
+        // Rebuild the matrix
+        rebuildMatrix();
+        
+        // Apply all of the new info from the link state packets
+        while (!pendingUpdates.isEmpty()) {
+            updateMetrics(pendingUpdates.remove());
+        }
+        
+        // Build the tree
+        buildMst();
+        
+        // Build the forwarding table
+        constructForwardingTable();
     }
 
     /**
@@ -64,133 +114,6 @@ public class OverlayRoutingModel {
         if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
             nodesToAdd.add(addr);
         }
-        // TODO tell the network interface to connect to this node (add to
-        // newSocketChannels)
-        // This will probably need to be synchronized.
-    }
-
-    /**
-     * Lazy delete a node. (Only call this if you are going to update right
-     * after)
-     */
-    public synchronized void removeNodeLazy(InetAddress addr) {
-        // lazy delete
-        if (nodeToIndex.containsKey(addr)) {
-            knownNodes[nodeToIndex.get(addr)] = null;
-            nodeToIndex.remove(addr);
-        }
-    }
-
-    /**
-     * Update the model based on new information from the given src node
-     */
-    public synchronized void updateTopology(InetAddress src,
-            Map<InetAddress, Double> newValues) {
-        // Update known nodes
-        for (InetAddress addr : newValues.keySet()) {
-            if (!nodeToIndex.containsKey(addr)) {
-                addNode(addr);
-            }
-        }
-
-        // If we need to, add nodes or remove nodes
-        rebuildMatrix();
-
-        // Update the values in the table
-        updateMetrics(src, newValues);
-
-        // Rebuild the MST and the forwarding table
-        updateModel();
-    }
-
-    /**
-     * Call this when a low layer connection to a given dest is closed. This
-     * will mark the connection as non-existent in the metric table.
-     */
-    // TODO if our network will always be fully connected, we may just want to
-    // send out a remove node update if we cannot connect to a node...?
-    public void closeConnection(InetAddress destAddr) {
-        int src = nodeToIndex.get(selfAddress);
-        int dest = nodeToIndex.get(destAddr);
-
-        // Do it manually since we want to trust ourselves, not necessarily the
-        // node with the lower ip address
-        metrics[src][dest] = -1.;
-        metrics[dest][src] = -1.;
-    }
-
-    /**
-     * Update values in the table without creating a new table (all nodes must
-     * be in the matrix already)
-     */
-    public void updateMetrics(InetAddress src, Map<InetAddress, Double> values) {
-        int row = nodeToIndex.get(src);
-
-        // Update the metrics
-        for (int i = 0; i < metrics.length; i++) {
-            if (!values.containsKey(knownNodes[i]))
-                insertMetricTable(row, i, -1.);
-            else
-                insertMetricTable(row, i, values.get(knownNodes[i]));
-        }
-    }
-
-    /**
-     * If necessary, rebuild the matrix (i.e. do a batch update for the lazy
-     * adds and deletes).
-     */
-    public synchronized void rebuildMatrix() {
-        // If we don't need to rebuild it, then just return
-        if (nodesToAdd.isEmpty() && nodeToIndex.size() == knownNodes.length)
-            return;
-
-        // Figure out the new number of nodes
-        int newSize = 0;
-        for (int i = 0; i < knownNodes.length; i++)
-            newSize += (knownNodes[i] != null) ? 1 : 0;
-        newSize += nodesToAdd.size();
-
-        // Create the new metrics matrix
-        double[][] newMetrics = new double[newSize][newSize];
-
-        // Populate the new matrix with the pertinent old metrics
-        for (int i = 0; i < newSize; i++) {
-            for (int j = 0; j < newSize; j++) {
-                if (j >= knownNodes.length || i >= knownNodes.length
-                        || knownNodes[j] == null || knownNodes[i] == null) {
-                    newMetrics[i][j] = -1.;
-                } else {
-                    newMetrics[i][j] = metrics[i][j];
-                }
-            }
-        }
-
-        // Create the new known nodes array and map
-        InetAddress[] newKnownNodes = new InetAddress[newSize];
-        Map<InetAddress, Integer> newNodeToIndex = new HashMap<InetAddress, Integer>();
-
-        // Populate the new known nodes array and map
-        for (int i = 0; i < newSize; i++) {
-            if (i >= knownNodes.length || knownNodes[i] == null)
-                newKnownNodes[i] = nodesToAdd.remove();
-            else
-                newKnownNodes[i] = knownNodes[i];
-
-            newNodeToIndex.put(newKnownNodes[i], i);
-        }
-
-        metrics = newMetrics;
-        knownNodes = newKnownNodes;
-        nodeToIndex = newNodeToIndex;
-    }
-
-    /**
-     * Update the model (i.e. the tree and the forwarding table) based on the
-     * current graph (metric matrix).
-     */
-    public void updateModel() {
-        buildMst();
-        constructForwardingTable();
     }
 
     /**
@@ -229,6 +152,86 @@ public class OverlayRoutingModel {
 
     public synchronized InetAddress getSelfAddress() {
         return selfAddress;
+    }
+    
+    /**
+     * Lazy delete a node. (Only call this if you are going to update right
+     * after)
+     */
+    private void removeNode(InetAddress addr) {
+        // lazyish delete
+        if (nodeToIndex.containsKey(addr)) {
+            knownNodes[nodeToIndex.get(addr)] = null;
+            nodeToIndex.remove(addr);
+        }
+    }
+
+    /**
+     * Update values in the table without creating a new table (all nodes must
+     * be in the matrix already)
+     */
+    private void updateMetrics(TopologyUpdate update) {
+        InetAddress src = update.src;
+        Map<InetAddress, Double> values = update.metrics;
+        
+        int row = nodeToIndex.get(src);
+
+        // Update the metrics
+        for (int i = 0; i < metrics.length; i++) {
+            if (!values.containsKey(knownNodes[i]))
+                insertMetricTable(row, i, DEFAULT_METRIC);
+            else
+                insertMetricTable(row, i, values.get(knownNodes[i]));
+        }
+    }
+
+    /**
+     * If necessary, rebuild the matrix (i.e. do a batch update for the lazy
+     * adds and deletes).
+     */
+    private void rebuildMatrix() {
+        // If we don't need to rebuild it, then just return
+        if (nodesToAdd.isEmpty() && nodeToIndex.size() == knownNodes.length)
+            return;
+
+        // Figure out the new number of nodes
+        int newSize = 0;
+        for (int i = 0; i < knownNodes.length; i++)
+            newSize += (knownNodes[i] != null) ? 1 : 0;
+        newSize += nodesToAdd.size();
+
+        // Create the new metrics matrix
+        double[][] newMetrics = new double[newSize][newSize];
+
+        // Populate the new matrix with the pertinent old metrics
+        for (int i = 0; i < newSize; i++) {
+            for (int j = 0; j < newSize; j++) {
+                if (j >= knownNodes.length || i >= knownNodes.length
+                        || knownNodes[j] == null || knownNodes[i] == null) {
+                    newMetrics[i][j] = DEFAULT_METRIC;
+                } else {
+                    newMetrics[i][j] = metrics[i][j];
+                }
+            }
+        }
+
+        // Create the new known nodes array and map
+        InetAddress[] newKnownNodes = new InetAddress[newSize];
+        Map<InetAddress, Integer> newNodeToIndex = new HashMap<InetAddress, Integer>();
+
+        // Populate the new known nodes array and map
+        for (int i = 0; i < newSize; i++) {
+            if (i >= knownNodes.length || knownNodes[i] == null)
+                newKnownNodes[i] = nodesToAdd.remove();
+            else
+                newKnownNodes[i] = knownNodes[i];
+
+            newNodeToIndex.put(newKnownNodes[i], i);
+        }
+
+        metrics = newMetrics;
+        knownNodes = newKnownNodes;
+        nodeToIndex = newNodeToIndex;
     }
 
     /**
