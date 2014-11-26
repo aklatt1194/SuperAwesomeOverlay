@@ -26,14 +26,14 @@ public class IPUtils {
         byte[] oneBytes = one.getAddress();
         byte[] twoBytes = two.getAddress();
                 
-        // Longer address is greater -- TODO: shouldn't they always be the same length?
+        // Longer address is greater
         if (oneBytes.length != twoBytes.length)
             return oneBytes.length - twoBytes.length;
         
         // Otherwise compare byte by byte
         for (int i = 0; i < oneBytes.length; i++) {
             if (oneBytes[i] != twoBytes[i])
-                return oneBytes[i] - twoBytes[i];
+                return (int)(oneBytes[i] & 0xFF) - (int)(twoBytes[i] & 0xFF);
         }
         
         return 0;
