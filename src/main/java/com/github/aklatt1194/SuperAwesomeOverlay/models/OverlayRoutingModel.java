@@ -12,14 +12,18 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.OverlayRoutingManager.TopologyUpdate;
+import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class OverlayRoutingModel {
     
     public static final int DEFAULT_METRIC = 1000;
     
+    private NetworkInterface netInterface;
+    
     // Used for managing the matrix of metrics
     private Queue<TopologyUpdate> pendingUpdates;
+    private Queue<InetAddress> nodesToRemove;
     private Queue<InetAddress> nodesToAdd;
     private Map<InetAddress, Integer> nodeToIndex;
     private InetAddress[] knownNodes;
@@ -47,6 +51,7 @@ public class OverlayRoutingModel {
 
         pendingUpdates = new LinkedList<TopologyUpdate>();
         nodesToAdd = new LinkedList<InetAddress>();
+        nodesToRemove = new LinkedList<InetAddress>();
 
         metrics = new double[nodeToIndex.size()][nodeToIndex.size()];
 
@@ -66,21 +71,10 @@ public class OverlayRoutingModel {
         // Update known nodes let addNode take care of preventing duplicates
         for (InetAddress addr : newValues.keySet()) {
             if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
-                // TODO have networkinterface connect to the new node and then
-                // if it is successful call addNode
+                netInterface.connectAndAdd(addr);
             }
         }
-        
-        // TODO we could get rid of this whole loop and remove nodes who don't
-        // respond to ls updates instead
-        for (InetAddress known : nodeToIndex.keySet()) {
-            if (!newValues.containsKey(known)) {
-                // TODO check the health of the connection
-                // but don't call removeNode here!!!!!!
-                // we need an even lazier delete
-            }
-        }
-        
+        // Add this update to the pending queue
         pendingUpdates.add(update);
     }
     
@@ -88,8 +82,12 @@ public class OverlayRoutingModel {
      * Trigger all of the batched link state updates to rebuild the model
      */
     public synchronized void triggerFullUpdate() {
-        // TODO do some explicit deletes here (i.e. call removeNode on nodes
-        // that we have determined are unresponsive)?
+        // Do a more explicit delete (still lazyish as it does not fully take effect
+        // until we rebuild the matrix). For the purposes of knownNeighborNodes it does
+        // do a complete remove however.
+        while (!nodesToRemove.isEmpty()) {
+            removeNodeHelper(nodesToRemove.remove());
+        }
         
         // Rebuild the matrix
         rebuildMatrix();
@@ -114,6 +112,16 @@ public class OverlayRoutingModel {
         if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
             nodesToAdd.add(addr);
         }
+    }
+    
+    /**
+     * Lazy remove a node. (Only call this if you are going to update right
+     * adter).
+     */
+    public synchronized void deleteNode(InetAddress addr) {
+        if (!nodesToAdd.contains(addr) && nodeToIndex.containsKey(addr) && 
+                !nodesToRemove.contains(addr))
+            nodesToRemove.add(addr);
     }
 
     /**
@@ -155,11 +163,16 @@ public class OverlayRoutingModel {
     }
     
     /**
-     * Lazy delete a node. (Only call this if you are going to update right
-     * after)
+     * Register a networkinterface as a sort of 'listener' for events
      */
-    private void removeNode(InetAddress addr) {
-        // lazyish delete
+    public synchronized void registerNetworkInterface(NetworkInterface netInterface) {
+        this.netInterface = netInterface;
+    }
+    
+    /**
+     * Helper method called by triggerFullUpdate to delete nodes (still lazyish)
+     */
+    private void removeNodeHelper(InetAddress addr) {
         if (nodeToIndex.containsKey(addr)) {
             knownNodes[nodeToIndex.get(addr)] = null;
             nodeToIndex.remove(addr);

@@ -10,6 +10,7 @@ import java.util.Set;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.BaseLayerSocket;
+import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
@@ -19,14 +20,19 @@ public class OverlayRoutingManager implements Runnable {
     public static final long LINK_STATE_PERIOD = 1000 * 60; // 60 sec
     public static final long METRIC_AVERAGE_PERIOD = 60 * 1000 * 5; // 5 min
     public static final long LS_TIMEOUT = 2 * 1000;
+    public static final long BOOTUP_TIME = 2 * 1000;
     
     private boolean forceLinkState;  
     private BaseLayerSocket socket;
     private MetricsDatabaseManager db;
     private OverlayRoutingModel model;
     private long lastLinkState;
+    private NetworkInterface netInterface;
     
-    public OverlayRoutingManager(OverlayRoutingModel model, MetricsDatabaseManager db) {
+    public OverlayRoutingManager(OverlayRoutingModel model, MetricsDatabaseManager db, 
+            NetworkInterface netInterface) {
+        this.forceLinkState = true;
+        this.netInterface = netInterface;
         this.lastLinkState = 0;
         this.db = db;
         this.model = model;
@@ -37,8 +43,17 @@ public class OverlayRoutingManager implements Runnable {
 
     @Override
     public void run() {
+        // We may want to try sleeping for a little bit to give the NetworkInterface
+        // time to establish all of its connections before we start sending out
+        // link state updates.
+        try {
+            Thread.sleep(BOOTUP_TIME);
+        } catch (InterruptedException e) {
+        }
+        
         Set<InetAddress> expected = null;
         while (true) {
+            // Should we be initiating a link state update
             if (getAndSetForceLinkState(false) || 
                     (System.currentTimeMillis() - lastLinkState) > LINK_STATE_PERIOD) {
                 sendLinkStateUpdate();
@@ -71,10 +86,14 @@ public class OverlayRoutingManager implements Runnable {
             while (!expected.isEmpty()) {
                 SimpleDatagramPacket packet = socket.receive(LS_TIMEOUT);
                 
+                // We have not received any more packets, the remaining nodes
+                // must be down. Explicitly disconnect and remove them.
                 if (packet == null) {
-                    // TODO wondering if we should kill the TCP connections
-                    // and remove the nodes still in expected here... 
-                    // they are not responsive at this point
+                    // Disconnect from the remaining nodes
+                    for (InetAddress node : expected) {
+                        netInterface.disconnectFromNode(node);
+                    }
+                        
                     break;
                 } else {
                     TopologyUpdate upd = TopologyUpdate.deserialize(packet.getPayload());
@@ -107,6 +126,10 @@ public class OverlayRoutingManager implements Runnable {
         lastLinkState = System.currentTimeMillis();
     }
     
+    /**
+     * Query the database for metrics and return the result in the form of a
+     * topology update
+     */
     private TopologyUpdate getMetricsFromDB() {
         TopologyUpdate upd = new TopologyUpdate();
         
@@ -115,7 +138,7 @@ public class OverlayRoutingManager implements Runnable {
         upd.metrics.put(upd.src, -1.);
         
         long time = System.currentTimeMillis();
-        // TODO should we also be looping through nodestoadd? Dont think so???
+        // TODO I think maybe we should be iterating over nodesToAdd as well
         for (InetAddress addr : model.getKnownNeighbors()) {
             String node = addr.getHostAddress();
             
@@ -142,6 +165,9 @@ public class OverlayRoutingManager implements Runnable {
     }
     
     private double getAvg(Map<Long, Double> stats) {
+        if (stats.isEmpty())
+            return OverlayRoutingModel.DEFAULT_METRIC;
+        
         double avg = 0;
         
         for (Long l : stats.keySet())

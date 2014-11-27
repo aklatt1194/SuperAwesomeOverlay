@@ -32,11 +32,7 @@ public class NetworkInterface implements Runnable {
     private OverlayRoutingModel model;
     private Map<String, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
-    private Map<InetAddress, SocketChannel> newSocketChannels; // TODO make
-                                                               // synchronized
-                                                               // and add to it
-                                                               // from
-                                                               // OverlayModel
+    private Map<InetAddress, SocketChannel> newSocketChannels;
 
     private ServerSocketChannel serverChannel;
     private Selector selector;
@@ -202,6 +198,9 @@ public class NetworkInterface implements Runnable {
 
         // add this newly connected node to model
         model.addNode(addr);
+        
+        // TODO I think we should be triggering an explicit link state update
+        // here (i.e. when a new node is connecting to us)???
 
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
@@ -355,6 +354,28 @@ public class NetworkInterface implements Runnable {
     // close a SimpleSocket
     protected void closeSocket(SimpleSocket simpleSocket) {
         portMap.remove(simpleSocket);
+    }
+    
+    /**
+     * Try to open a TCP connection to the given address and add the node to
+     * the model if we are successful
+     * 
+     * @param addr The node to attempt to connect to and add
+     */
+    public void connectAndAdd(InetAddress addr) {
+        // TODO implement... add the node only on success
+        model.addNode(addr);
+    }
+    
+    /**
+     * Try to disconnect (close the TCP connection) to the given node and
+     * if successful remove it from the known nodes
+     * 
+     * @param addr The node to attempt to disconnect from and remove
+     */
+    public void disconnectFromNode(InetAddress addr) {
+        // TODO implement...
+        model.deleteNode(addr);
     }
 
     /**
