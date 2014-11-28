@@ -1,6 +1,12 @@
 package com.github.aklatt1194.SuperAwesomeOverlay.models;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Date;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -59,6 +65,12 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
         return getConnectionData(node, startTime, endTime, LATENCY_TABLE);
     }
 
+    public Map<Long, Double> getLatencyData(String node, long startTime,
+            long endTime, long bucketSize) {
+        return getConnectionData(node, startTime, endTime, bucketSize,
+                LATENCY_TABLE);
+    }
+
     public Map<Long, Double> getThroughputData(String node, long startTime,
             long endTime) {
         return getConnectionData(node, startTime, endTime, THROUGHPUT_TABLE);
@@ -74,8 +86,7 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
      * @param startTime
      * @param endTime
      * @param table
-     * @throws IllegalArgumentException
-     *             If startTime or endTime is invalid
+     * @throws IllegalArgumentException If startTime or endTime is invalid
      * @return
      */
     private Map<Long, Double> getConnectionData(String node, long startTime,
@@ -85,10 +96,9 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
 
         Map<Long, Double> result = new TreeMap<>();
 
-        String select = "SELECT Time, " + table + " FROM " + table
-                + " WHERE Node='" + node + "' AND Time>=" + startTime
-                + " AND Time<" + endTime + ";";
-
+        String select = String
+                .format("SELECT Time, %s FROM %s WHERE Node=%s AND Time>=%d AND Time<%d",
+                        table, table, node, startTime, endTime);
         try {
             // Execute the statement
             Statement stmt = c.createStatement();
@@ -111,22 +121,67 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
     }
 
     /**
+     * Get all of the network data from the given table for the given node that
+     * was recorded between startTime and endTime
+     * 
+     * Each result is the average of data within a given bucket, and the
+     * timestamp returned for each bucket lies in the middle of the range.
+     * 
+     * @param node
+     * @param startTime
+     * @param endTime
+     * @param bucketSize
+     * @param table
+     * @return
+     */
+    private Map<Long, Double> getConnectionData(String node, long startTime,
+            long endTime, long bucketSize, String table) {
+        if (startTime < 0 || startTime > endTime)
+            throw new IllegalArgumentException();
+
+        Map<Long, Double> result = new TreeMap<>();
+
+        String select = String.format(
+                "SELECT (min(Time) / %d) * %d + %d / 2 as Time, Node, avg(%s) "
+                        + "FROM %s WHERE Time >= %d AND Time <%d "
+                        + "GROUP BY Time / %d, Node", bucketSize, bucketSize,
+                bucketSize, table, table, startTime, endTime, bucketSize);
+
+        long now = new Date().getTime();
+
+        try {
+            // Execute the statement
+            Statement stmt = c.createStatement();
+            ResultSet rs = stmt.executeQuery(select);
+
+            // Populate the map with the result set
+            while (rs.next()) {
+                long time = rs.getLong("Time");
+                double value = rs.getDouble(table);
+                result.put(Math.min(time, now), value);
+            }
+
+            return result;
+        } catch (SQLException e) {
+            System.err.println("Error getting the data from table " + table
+                    + " !");
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
      * Add the given information to the given table
      * 
-     * @param nodeName
-     *            The node representing the connection
-     * @param time
-     *            The time
-     * @param value
-     *            The network value
-     * @param table
-     *            The table
+     * @param nodeName The node representing the connection
+     * @param time The time
+     * @param value The network value
+     * @param table The table
      */
     private void addNetworkData(String nodeName, long time, double value,
             String table) {
-        String insert = "INSERT INTO " + table + " (Time, Node, " + table
-                + ") " + "VALUES (" + time + ", '" + nodeName + "', " + value
-                + " );";
+        String insert = "INSERT INTO " + table + "VALUES (" + time + ", '"
+                + nodeName + "', " + value + " );";
 
         try {
             Statement stmt = c.createStatement();
@@ -141,10 +196,8 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
      * Returns true iff the database with the given connection has a table with
      * the given name
      * 
-     * @param c
-     *            The connection
-     * @param name
-     *            The name of the table
+     * @param c The connection
+     * @param name The name of the table
      * @return True iff the table with the given name exists
      * @throws SQLException
      */
@@ -160,10 +213,8 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
      * connection to a given node at a given time) and add an index to the table
      * on the Time field
      * 
-     * @param c
-     *            The database connection
-     * @param name
-     *            The name of the table to create
+     * @param c The database connection
+     * @param name The name of the table to create
      * @throws SQLException
      */
     private static void createNetworkDataTable(Connection c, String name)
@@ -185,5 +236,4 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
         stmt.executeUpdate(createIndex);
 
     }
-
 }
