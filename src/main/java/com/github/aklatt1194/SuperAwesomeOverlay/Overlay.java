@@ -38,7 +38,7 @@ public class Overlay {
         new WebRoutes();
         new KnownNodesEndpoint(geodb, overlayRoutingModel);
         new NetworkTopologyEndpoint(geodb, overlayRoutingModel);
-        new MetricsEndpoints(metricsdb, overlayRoutingModel);
+        new MetricsEndpoints(metricsdb, geodb, overlayRoutingModel);
 
         // websockets
         Server server = new Server("localhost", 8025, "/endpoints", null,

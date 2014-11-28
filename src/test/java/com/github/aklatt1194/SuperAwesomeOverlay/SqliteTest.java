@@ -49,7 +49,7 @@ public class SqliteTest extends TestCase {
                 System.currentTimeMillis());
 
         for (Long l : data2.keySet()) {
-            System.out.println("Time: " + new Date(l).toGMTString()
+            System.out.println("Time: " + new Date(l)
                     + " , Throughput: " + data2.get(l));
         }
 
@@ -59,7 +59,7 @@ public class SqliteTest extends TestCase {
                 System.currentTimeMillis());
 
         for (Long l : data.keySet()) {
-            System.out.println("Time: " + new Date(l).toGMTString()
+            System.out.println("Time: " + new Date(l)
                     + " , Latency: " + data.get(l));
         }
 

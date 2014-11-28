@@ -97,7 +97,7 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
         Map<Long, Double> result = new TreeMap<>();
 
         String select = String
-                .format("SELECT Time, %s FROM %s WHERE Node=%s AND Time>=%d AND Time<%d",
+                .format("SELECT Time, %s FROM %s WHERE Node='%s' AND Time>=%d AND Time<%d",
                         table, table, node, startTime, endTime);
         try {
             // Execute the statement
@@ -141,13 +141,12 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
 
         Map<Long, Double> result = new TreeMap<>();
 
-        String select = String.format(
-                "SELECT (min(Time) / %d) * %d + %d / 2 as Time, Node, avg(%s) "
-                        + "FROM %s WHERE Time >= %d AND Time <%d "
-                        + "GROUP BY Time / %d, Node", bucketSize, bucketSize,
-                bucketSize, table, table, startTime, endTime, bucketSize);
-
-        long now = new Date().getTime();
+        String select = String
+                .format("SELECT ((min(Time) + %d) / %d) * %d as Time, Node, avg(%s) as %s "
+                        + "FROM %s WHERE Node='%s' AND Time >= %d AND Time <%d "
+                        + "GROUP BY (Time + %d) / %d, Node", bucketSize / 2,
+                        bucketSize, bucketSize, table, table, table, node,
+                        startTime, endTime, bucketSize / 2, bucketSize);
 
         try {
             // Execute the statement
@@ -158,7 +157,7 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
             while (rs.next()) {
                 long time = rs.getLong("Time");
                 double value = rs.getDouble(table);
-                result.put(Math.min(time, now), value);
+                result.put(time, value);
             }
 
             return result;
@@ -167,6 +166,7 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
                     + " !");
             e.printStackTrace();
         }
+
         return null;
     }
 
@@ -180,8 +180,8 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
      */
     private void addNetworkData(String nodeName, long time, double value,
             String table) {
-        String insert = "INSERT INTO " + table + "VALUES (" + time + ", '"
-                + nodeName + "', " + value + " );";
+        String insert = "INSERT INTO " + table + " VALUES(" + time + ", '"
+                + nodeName + "', " + value + ")";
 
         try {
             Statement stmt = c.createStatement();
@@ -221,9 +221,9 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
             throws SQLException {
         // Create the table
         String createTable = "CREATE TABLE " + name
-                + "(Time         BIGINT          NOT NULL,"
-                + " Node         VARCHAR(100)    NOT NULL," + " " + name
-                + " DOUBLE          NOT NULL)";
+                + "(Time         BIGINT           NOT NULL,"
+                + " Node         VARCHAR(100)     NOT NULL," + " " + name
+                + " DOUBLE           NOT NULL)";
 
         Statement stmt = c.createStatement();
         stmt.executeUpdate(createTable);

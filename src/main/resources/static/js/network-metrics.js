@@ -7,7 +7,9 @@ SAO.metrics = {
     var end = new Date();
     start.setDate(start.getDate() - 7);
 
-    $.get('/endpoints/latency/' + start.getTime() + '/' + end.getTime(), function(json) {
+    var bucketSize = 600000;
+
+    $.get('/endpoints/latency/' + start.getTime() + '/' + end.getTime() + '/' + bucketSize, function(json) {
 
       $('#latency-chart').highcharts({
         credits: {
@@ -21,7 +23,7 @@ SAO.metrics = {
         },
         xAxis: {
           type: 'datetime',
-          dateTimeLabelFormats: { // don't display the dummy year
+          dateTimeLabelFormats: {
             month: '%e. %b',
             year: '%b'
           }
@@ -32,9 +34,16 @@ SAO.metrics = {
           },
           min: 0
         },
+        zoomType: 'x',
         series: json,
         tooltip: {
-          valueSuffix: ' ms'
+          crosshairs: [true],
+          formatter: function() {
+            var start = new Date(this.x - bucketSize / 2);
+            var end = new Date(this.x + bucketSize / 2);
+
+            return start.toUTCString().slice(17) + " to " + end.toUTCString().slice(17) + '<br/>Average Latency:<br /><strong>' + this.y + ' ms<strong>';
+          }
         }
       });
     });
