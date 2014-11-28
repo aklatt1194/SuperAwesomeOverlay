@@ -6,9 +6,6 @@ SAO.setup = function() {
 
   $.get('endpoints/known_nodes', function(data) {
     SAO.setNodeNavigation(data);
-    if (SAO.networkMap) {
-      SAO.networkMap.drawNodes(data);
-    }
   });
 };
 
