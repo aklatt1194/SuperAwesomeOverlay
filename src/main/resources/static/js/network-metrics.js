@@ -102,7 +102,8 @@ SAO.metrics = {
           events: {
             afterSetExtremes: afterSetExtremes
           },
-          minRange: 3600 * 1000
+          minRange: 3600 * 1000,
+          ordinal: false
         }
       });
     });
