@@ -10,28 +10,27 @@ import com.github.aklatt1194.SuperAwesomeOverlay.network.BaseLayerSocket;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 
 public class PingTester {
-    public PingTester(OverlayRoutingModel model,
-            MetricsDatabaseManager dbManager) {
-        Thread sender = new Thread(new PingTestSender(model, dbManager));
-        Thread receiver = new Thread(new PingTestReplier(model));
+    public static final byte REQUEST = 0x1;
+    public static final byte RESPONSE = 0x2;
+    public static final int PORT = 9876;
+    BaseLayerSocket socket;
+    OverlayRoutingModel model;
+    MetricsDatabaseManager db;
+
+    public PingTester(OverlayRoutingModel model, MetricsDatabaseManager db) {
+        this.model = model;
+        this.db = db;
+
+        socket = new BaseLayerSocket();
+        socket.bind(PORT);
+
+        Thread sender = new Thread(new PingTestSender());
+        Thread receiver = new Thread(new PingTestReceiver());
         sender.start();
         receiver.start();
     }
 
-    static class PingTestSender implements Runnable {
-        BaseLayerSocket socket;
-        OverlayRoutingModel model;
-
-        PingTestSender(OverlayRoutingModel model,
-                MetricsDatabaseManager dbManager) {
-            this.model = model;
-            socket = new BaseLayerSocket();
-            socket.bind(9876);
-
-            Thread receiver = new Thread(new PingTestReceiver(dbManager));
-            receiver.start();
-        }
-
+    class PingTestSender implements Runnable {
         @Override
         public void run() {
             while (true) {
@@ -40,62 +39,37 @@ public class PingTester {
                 } catch (InterruptedException e) {
                 }
                 for (InetAddress node : model.getKnownNeighbors()) {
-                    ByteBuffer buf = ByteBuffer.allocate(8);
+                    ByteBuffer buf = ByteBuffer.allocate(9);
+                    buf.put(REQUEST);
                     buf.putLong(new Date().getTime());
 
                     SimpleDatagramPacket packet = new SimpleDatagramPacket(
-                            model.getSelfAddress(), node, 9876, 6789,
+                            model.getSelfAddress(), node, PORT, PORT,
                             buf.array());
                     socket.send(packet);
                 }
             }
         }
-
-        class PingTestReceiver implements Runnable {
-            private MetricsDatabaseManager dbManager;
-
-            public PingTestReceiver(MetricsDatabaseManager dbManager) {
-                this.dbManager = dbManager;
-            }
-
-            @Override
-            public void run() {
-                while (true) {
-                    SimpleDatagramPacket response = socket.receive();
-                    long timestamp = ByteBuffer.wrap(response.getPayload())
-                            .getLong();
-                    // Collect the result in the DB
-                    dbManager.addLatencyData(response.getSource()
-                            .getHostAddress(), System.currentTimeMillis(),
-                            new Date().getTime() - timestamp);
-
-                    /*
-                     * Uncomment for debug System.out.println("response from " +
-                     * response.getSource().getHostAddress() + " " + ((new
-                     * Date().getTime()) - timestamp));
-                     */
-                }
-            }
-        }
     }
 
-    static class PingTestReplier implements Runnable {
-        BaseLayerSocket socket;
-        OverlayRoutingModel model;
-
-        PingTestReplier(OverlayRoutingModel model) {
-            this.model = model;
-            socket = new BaseLayerSocket();
-            socket.bind(6789);
-        }
-
+    class PingTestReceiver implements Runnable {
         @Override
         public void run() {
             while (true) {
-                SimpleDatagramPacket packet = socket.receive();
-                socket.send(new SimpleDatagramPacket(model.getSelfAddress(),
-                        packet.getSource(), packet.getDestinationPort(), packet
-                                .getSourcePort(), packet.getPayload()));
+                SimpleDatagramPacket response = socket.receive();
+                ByteBuffer buf = ByteBuffer.wrap(response.getPayload());
+                byte flags = buf.get();
+
+                if (flags == REQUEST) {
+                    byte[] payload = buf.array();
+                    payload[0] = RESPONSE;
+                    socket.send(new SimpleDatagramPacket(model.getSelfAddress(), response.getSource(), PORT, PORT, payload));
+                } else {
+                    long timestamp = buf.getLong();
+                    db.addLatencyData(response.getSource().getHostAddress(),
+                            System.currentTimeMillis(), new Date().getTime()
+                                    - timestamp);
+                }
             }
         }
     }

@@ -48,6 +48,6 @@ public class Overlay {
         // uncomment for extended logging
         // BasicConfigurator.configure();
         
-        //new PingTester(routingTable, metricsdb); TODO: this needs some fixin
+        new PingTester(overlayRoutingModel, metricsdb);
     }
 }
