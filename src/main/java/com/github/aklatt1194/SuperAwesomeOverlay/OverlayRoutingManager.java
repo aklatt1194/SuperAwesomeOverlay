@@ -4,6 +4,7 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,8 +30,7 @@ public class OverlayRoutingManager implements Runnable {
     private long lastLinkState;
     private NetworkInterface netInterface;
     
-    public OverlayRoutingManager(OverlayRoutingModel model, MetricsDatabaseManager db, 
-            NetworkInterface netInterface) {
+    public OverlayRoutingManager(OverlayRoutingModel model, MetricsDatabaseManager db) {
         this.forceLinkState = true;
         this.netInterface = netInterface;
         this.lastLinkState = 0;
@@ -38,6 +38,7 @@ public class OverlayRoutingManager implements Runnable {
         this.model = model;
         this.socket = new BaseLayerSocket();
         this.socket.bind(PORT);
+        NetworkInterface.getInstance().registerOverlayRoutingManager(this);
         new Thread(this).start();
     }
 
@@ -56,7 +57,7 @@ public class OverlayRoutingManager implements Runnable {
             // Should we be initiating a link state update
             if (getAndSetForceLinkState(false) || 
                     (System.currentTimeMillis() - lastLinkState) > LINK_STATE_PERIOD) {
-                sendLinkStateUpdate();
+                sendLinkStateUpdate(model.getKnownNeighbors());
                 
                 // Nodes we are expecting to receive ls updates from
                 expected = new HashSet<InetAddress>(model.getKnownNeighbors());
@@ -71,11 +72,15 @@ public class OverlayRoutingManager implements Runnable {
                     model.recordLinkStateInformation(initUpd);
                     
                     // Send out our own ls update
-                    sendLinkStateUpdate();
+                    sendLinkStateUpdate(model.getKnownNeighbors());
                     
-                    // We are expecting to hear from all nodes except this first one
-                    expected = new HashSet<InetAddress>(model.getKnownNeighbors());
-                    expected.remove(initUpd.src);
+                    // We are expecting to hear from everyone that the src of 
+                    // this update knows about
+                    expected = new HashSet<InetAddress>();
+                    for (InetAddress addr : initUpd.metrics.keySet()) {
+                        if (!addr.equals(initUpd.src))
+                            expected.add(addr);
+                    }
                 } else {
                     // We haven't received any ls updates from others, so keep waiting
                     continue;
@@ -109,14 +114,14 @@ public class OverlayRoutingManager implements Runnable {
     /**
      * Send out a link state update to all of our neighbors and apply it to ourself
      */
-    private void sendLinkStateUpdate() {
+    private void sendLinkStateUpdate(List<InetAddress> dests) {
         // Get the update from the db
         TopologyUpdate upd = getMetricsFromDB();
         // Apply it to ourselves
         model.recordLinkStateInformation(upd);
         
         // Send it to all of our neighbors
-        for (InetAddress dst : model.getKnownNeighbors()) {
+        for (InetAddress dst : dests) {
             SimpleDatagramPacket packet = new SimpleDatagramPacket(upd.src, 
                     dst, PORT, PORT, upd.serialize());
             socket.send(packet);
@@ -138,7 +143,7 @@ public class OverlayRoutingManager implements Runnable {
         upd.metrics.put(upd.src, -1.);
         
         long time = System.currentTimeMillis();
-        // TODO I think maybe we should be iterating over nodesToAdd as well
+
         for (InetAddress addr : model.getKnownNeighbors()) {
             String node = addr.getHostAddress();
             

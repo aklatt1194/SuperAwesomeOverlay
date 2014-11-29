@@ -16,6 +16,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import com.github.aklatt1194.SuperAwesomeOverlay.OverlayRoutingManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
@@ -30,6 +31,7 @@ public class NetworkInterface implements Runnable {
     private static NetworkInterface instance = null;
 
     private OverlayRoutingModel model;
+    private OverlayRoutingManager overlayRoutingManager;
     private Map<String, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
     private Map<InetAddress, SocketChannel> newSocketChannels;
@@ -174,7 +176,7 @@ public class NetworkInterface implements Runnable {
 
     // Accept a new connection. Save this socket in the tcpLinkTable and then
     // add it to the selector.
-    private void accept(SelectionKey key) throws IOException {
+    private synchronized void accept(SelectionKey key) throws IOException {
         ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key
                 .channel();
 
@@ -199,14 +201,16 @@ public class NetworkInterface implements Runnable {
         // add this newly connected node to model
         model.addNode(addr);
         
-        // TODO I think we should be triggering an explicit link state update
-        // here (i.e. when a new node is connecting to us)???
+        // TODO Verify this. I have no idea what I am doing here... could be very wrong!
+        // Notify the OverlayRoutingManager to do a forced ls update
+        overlayRoutingManager.getAndSetForceLinkState(true);
+        
 
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
     }
 
-    private void read(SelectionKey key) throws IOException {
+    private synchronized void read(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
 
         // clear out the read buffer then do the read
@@ -278,7 +282,7 @@ public class NetworkInterface implements Runnable {
     }
 
     // Queues up a packet so that it can be sent by the selector
-    protected void send(SimpleDatagramPacket packet) {
+    protected synchronized void send(SimpleDatagramPacket packet) {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
         SocketChannel socket = tcpLinkTable.get(packet.getDestination()
@@ -321,7 +325,7 @@ public class NetworkInterface implements Runnable {
     }
 
     // pull any pending writes of a socket's queue and write them to the socket
-    private void write(SelectionKey key) throws IOException {
+    private synchronized void write(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
         BlockingQueue<ByteBuffer> queue = pendingWrites.get(socketChannel);
 
@@ -362,8 +366,19 @@ public class NetworkInterface implements Runnable {
      * 
      * @param addr The node to attempt to connect to and add
      */
-    public void connectAndAdd(InetAddress addr) {
-        // TODO implement... add the node only on success
+    public synchronized void connectAndAdd(InetAddress addr) {
+        // TODO Verify this. I have no idea what I am doing here... could be very wrong!
+        try {
+            SocketChannel socketChannel = SocketChannel.open();
+            socketChannel.configureBlocking(false);
+            socketChannel.connect(new InetSocketAddress(addr, LINK_PORT));
+            tcpLinkTable.put(addr.getHostAddress(), socketChannel);
+            newSocketChannels.put(addr, socketChannel);
+        } catch (IOException e) {
+            // Failed to connect
+            return;
+        }
+        
         model.addNode(addr);
     }
     
@@ -373,9 +388,22 @@ public class NetworkInterface implements Runnable {
      * 
      * @param addr The node to attempt to disconnect from and remove
      */
-    public void disconnectFromNode(InetAddress addr) {
-        // TODO implement...
+    public synchronized void disconnectFromNode(InetAddress addr) {
+        // TODO Verify this. I have no idea what I am doing here... could be very wrong!
+        SocketChannel chan = tcpLinkTable.remove(addr.getHostAddress());
+        try {
+            chan.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         model.deleteNode(addr);
+    }
+    
+    /**
+     * Register an overlayroutingmanager for callbacks
+     */
+    public synchronized void registerOverlayRoutingManager(OverlayRoutingManager orm) {
+        this.overlayRoutingManager = orm;
     }
 
     /**

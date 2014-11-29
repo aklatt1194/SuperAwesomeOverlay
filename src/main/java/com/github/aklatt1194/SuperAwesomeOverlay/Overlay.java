@@ -32,10 +32,8 @@ public class Overlay {
             System.exit(1);
         }
         
-        overlayRoutingModel.registerNetworkInterface(NetworkInterface.getInstance());
-        
         OverlayRoutingManager overlayRoutingManager = new OverlayRoutingManager(
-                overlayRoutingModel, metricsdb, NetworkInterface.getInstance());
+                overlayRoutingModel, metricsdb);
 
         // web routes and endpoints
         new WebRoutes();

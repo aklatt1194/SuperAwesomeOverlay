@@ -19,14 +19,12 @@ public class OverlayRoutingModel {
     
     public static final int DEFAULT_METRIC = 1000;
     
-    private NetworkInterface netInterface;
-    
     // Used for managing the matrix of metrics
     private Queue<TopologyUpdate> pendingUpdates;
     private Queue<InetAddress> nodesToRemove;
     private Queue<InetAddress> nodesToAdd;
     private Map<InetAddress, Integer> nodeToIndex;
-    private InetAddress[] knownNodes;
+    private InetAddress[] indexToNode;
     private InetAddress selfAddress;
     private double[][] metrics;
 
@@ -46,7 +44,7 @@ public class OverlayRoutingModel {
 
         // Initially, we are the only known node
         nodeToIndex = new HashMap<InetAddress, Integer>();
-        knownNodes = new InetAddress[] { selfAddress };
+        indexToNode = new InetAddress[] { selfAddress };
         nodeToIndex.put(selfAddress, 0);
 
         pendingUpdates = new LinkedList<TopologyUpdate>();
@@ -71,7 +69,7 @@ public class OverlayRoutingModel {
         // Update known nodes let addNode take care of preventing duplicates
         for (InetAddress addr : newValues.keySet()) {
             if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
-                netInterface.connectAndAdd(addr);
+                NetworkInterface.getInstance().connectAndAdd(addr);
             }
         }
         // Add this update to the pending queue
@@ -136,7 +134,7 @@ public class OverlayRoutingModel {
      * are pending.
      */
     public synchronized List<InetAddress> getKnownNodes() {
-        List<InetAddress> result = new ArrayList<>(Arrays.asList(knownNodes));
+        List<InetAddress> result = new ArrayList<>(Arrays.asList(indexToNode));
         result.addAll(nodesToAdd);
 
         return result;
@@ -148,7 +146,7 @@ public class OverlayRoutingModel {
     public synchronized List<InetAddress> getKnownNeighbors() {
         List<InetAddress> result = new ArrayList<>();
 
-        for (InetAddress addr : knownNodes) {
+        for (InetAddress addr : indexToNode) {
             if (addr != selfAddress) {
                 result.add(addr);
             }
@@ -163,18 +161,11 @@ public class OverlayRoutingModel {
     }
     
     /**
-     * Register a networkinterface as a sort of 'listener' for events
-     */
-    public synchronized void registerNetworkInterface(NetworkInterface netInterface) {
-        this.netInterface = netInterface;
-    }
-    
-    /**
      * Helper method called by triggerFullUpdate to delete nodes (still lazyish)
      */
     private void removeNodeHelper(InetAddress addr) {
         if (nodeToIndex.containsKey(addr)) {
-            knownNodes[nodeToIndex.get(addr)] = null;
+            indexToNode[nodeToIndex.get(addr)] = null;
             nodeToIndex.remove(addr);
         }
     }
@@ -191,10 +182,10 @@ public class OverlayRoutingModel {
 
         // Update the metrics
         for (int i = 0; i < metrics.length; i++) {
-            if (!values.containsKey(knownNodes[i]))
+            if (!values.containsKey(indexToNode[i]))
                 insertMetricTable(row, i, DEFAULT_METRIC);
             else
-                insertMetricTable(row, i, values.get(knownNodes[i]));
+                insertMetricTable(row, i, values.get(indexToNode[i]));
         }
     }
 
@@ -204,13 +195,13 @@ public class OverlayRoutingModel {
      */
     private void rebuildMatrix() {
         // If we don't need to rebuild it, then just return
-        if (nodesToAdd.isEmpty() && nodeToIndex.size() == knownNodes.length)
+        if (nodesToAdd.isEmpty() && nodeToIndex.size() == indexToNode.length)
             return;
 
         // Figure out the new number of nodes
         int newSize = 0;
-        for (int i = 0; i < knownNodes.length; i++)
-            newSize += (knownNodes[i] != null) ? 1 : 0;
+        for (int i = 0; i < indexToNode.length; i++)
+            newSize += (indexToNode[i] != null) ? 1 : 0;
         newSize += nodesToAdd.size();
 
         // Create the new metrics matrix
@@ -219,8 +210,8 @@ public class OverlayRoutingModel {
         // Populate the new matrix with the pertinent old metrics
         for (int i = 0; i < newSize; i++) {
             for (int j = 0; j < newSize; j++) {
-                if (j >= knownNodes.length || i >= knownNodes.length
-                        || knownNodes[j] == null || knownNodes[i] == null) {
+                if (j >= indexToNode.length || i >= indexToNode.length
+                        || indexToNode[j] == null || indexToNode[i] == null) {
                     newMetrics[i][j] = DEFAULT_METRIC;
                 } else {
                     newMetrics[i][j] = metrics[i][j];
@@ -229,21 +220,21 @@ public class OverlayRoutingModel {
         }
 
         // Create the new known nodes array and map
-        InetAddress[] newKnownNodes = new InetAddress[newSize];
+        InetAddress[] newIndexToNode = new InetAddress[newSize];
         Map<InetAddress, Integer> newNodeToIndex = new HashMap<InetAddress, Integer>();
 
         // Populate the new known nodes array and map
         for (int i = 0; i < newSize; i++) {
-            if (i >= knownNodes.length || knownNodes[i] == null)
-                newKnownNodes[i] = nodesToAdd.remove();
+            if (i >= indexToNode.length || indexToNode[i] == null)
+                newIndexToNode[i] = nodesToAdd.remove();
             else
-                newKnownNodes[i] = knownNodes[i];
+                newIndexToNode[i] = indexToNode[i];
 
-            newNodeToIndex.put(newKnownNodes[i], i);
+            newNodeToIndex.put(newIndexToNode[i], i);
         }
 
         metrics = newMetrics;
-        knownNodes = newKnownNodes;
+        indexToNode = newIndexToNode;
         nodeToIndex = newNodeToIndex;
     }
 
@@ -282,9 +273,9 @@ public class OverlayRoutingModel {
             int index = nodeToIndex.get(addr);
             for (int i = 0; i < metrics.length; i++) {
                 // If this is a valid edge to a new node, add it to the queue
-                if (!nodesInTree.containsKey(knownNodes[i])
+                if (!nodesInTree.containsKey(indexToNode[i])
                         && metrics[index][i] > 0)
-                    edges.add(new Edge(node, new TreeNode(knownNodes[i]),
+                    edges.add(new Edge(node, new TreeNode(indexToNode[i]),
                             metrics[index][i]));
             }
 
@@ -299,12 +290,12 @@ public class OverlayRoutingModel {
     private void constructForwardingTable() {
         fTable = new HashMap<InetAddress, InetAddress>();
 
-        for (int i = 0; i < knownNodes.length; i++) {
+        for (int i = 0; i < indexToNode.length; i++) {
             for (TreeNode nodeInterface : root.children) {
                 // If this interface has a path to reach the node, update the
                 // table
-                if (hasPathToNode(nodeInterface, knownNodes[i])) {
-                    fTable.put(knownNodes[i], nodeInterface.address);
+                if (hasPathToNode(nodeInterface, indexToNode[i])) {
+                    fTable.put(indexToNode[i], nodeInterface.address);
                     break;
                 }
             }
@@ -340,7 +331,7 @@ public class OverlayRoutingModel {
         // update, we need to update 2 entries (A->B and B->A). We pick which
         // value
         // to use, by trusting the node with the smaller ip address.
-        if (IPUtils.compareIPs(knownNodes[col], knownNodes[row]) < 0)
+        if (IPUtils.compareIPs(indexToNode[col], indexToNode[row]) < 0)
             value = metrics[col][row];
 
         metrics[row][col] = value;
