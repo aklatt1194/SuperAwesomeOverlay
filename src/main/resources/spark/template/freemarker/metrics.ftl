@@ -7,7 +7,7 @@
 
     <script src="js/jquery.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
-    <script src="js/highcharts.js"></script>
+    <script src="js/highstock.js"></script>
     <script src="js/networkoverlay.js"></script>
     <script src="js/network-metrics.js"></script>
     <script>

@@ -9,33 +9,47 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider.GeoIPEntry;
 
 public class MetricsEndpoints {
-    private MetricsDatabaseManager db;
+    private MetricsDatabaseManager metricsdb;
+    private GeolocateDatabaseProvider geodb;
     private OverlayRoutingModel model;
 
-    public MetricsEndpoints(MetricsDatabaseManager db, OverlayRoutingModel model) {
-        this.db = db;
+    public MetricsEndpoints(MetricsDatabaseManager metricsdb,
+            GeolocateDatabaseProvider geodb, OverlayRoutingModel model) {
+        this.metricsdb = metricsdb;
+        this.geodb = geodb;
         this.model = model;
 
-        get("/endpoints/latency/:start/:end",
+        get("/endpoints/latency/:start/:end/:bucket_size",
                 (req, res) -> {
                     res.type("application/json");
                     return lookupLatencies(Long.parseLong(req.params("start")),
-                            Long.parseLong(req.params("end")));
+                            Long.parseLong(req.params("end")),
+                            Long.parseLong(req.params("bucket_size")));
                 }, json());
     }
 
     // Get all latencies during the specified time series.
-    private List<NodeMetrics> lookupLatencies(long startTime, long endTime) {
+    private List<NodeMetrics> lookupLatencies(long startTime, long endTime,
+            long bucketSize) {
         List<NodeMetrics> response = new ArrayList<>();
 
         for (InetAddress node : model.getKnownNeighbors()) {
-            NodeMetrics nodeMetrics = new NodeMetrics(node.getHostAddress());
-            Map<Long, Double> latencies = db.getLatencyData(nodeMetrics.name,
-                    startTime, endTime);
+            GeoIPEntry geoEntry = geodb.lookupNode(node);
+            String nodeLocation = "";
+            
+            nodeLocation += (geoEntry.city_name != null) ? geoEntry.city_name + ", " : "";
+            nodeLocation += (geoEntry.region_name != null) ? geoEntry.region_name + ", " : "";
+            nodeLocation += geoEntry.country;
+            
+            NodeMetrics nodeMetrics = new NodeMetrics(nodeLocation);
+            Map<Long, Double> latencies = metricsdb.getLatencyData(
+                    node.getHostAddress(), startTime, endTime, bucketSize);
 
             for (Entry<Long, Double> entry : latencies.entrySet()) {
                 List<Object> entryList = new ArrayList<>();

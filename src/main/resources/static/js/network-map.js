@@ -16,6 +16,7 @@ SAO.networkMap = {
       .attr("height", 700);
 
     var mapVis = vis.append("g");
+    this.linkVis = vis.append("g");
     this.nodeVis = vis.append("g");
 
     var drawMap = function(error, data) {
@@ -42,24 +43,53 @@ SAO.networkMap = {
     };
 
     d3.json("/json/world-110m2.json", drawMap);
+    $.get("/endpoints/network_topology", (function(self) {
+      return function(root) {
+        self.drawNetwork.call(self, root);
+      }
+    })(this));
   },
 
-  drawNodes: function(nodes) {
-    var self = this;
+  drawNetwork: function(root) {
+    var self = this,
+      tree,
+      nodes,
+      links,
+      path = d3.geo.path().projection(this.projection),
+      arc = d3.geo.greatArc().precision(3);
+
+    tree = d3.layout.tree();
+    nodes = tree.nodes(root);
+    links = tree.links(nodes);
 
     this.nodeVis.selectAll(".node").data(nodes)
-    .enter()
-    .append("svg:circle")
-    .attr("class", "node")
-    .attr("cx", function(d) {
-      return self.projection([d.lon, d.lat])[0];
-    })
-    .attr("cy", function(d) {
-      return self.projection([d.lon, d.lat])[1];
-    })
-    .attr("r", function(d) {
-      return d.hostname === window.location.host ? 10 : 5;
-    })
-    .attr("fill", "#F00");
+      .enter()
+      .append("svg:circle")
+      .attr("class", "node")
+      .attr("cx", function(d) {
+        return self.projection([d.lon, d.lat])[0];
+      })
+      .attr("cy", function(d) {
+        return self.projection([d.lon, d.lat])[1];
+      })
+      .attr("r", function(d) {
+        return d.hostname === window.location.host ? 10 : 5;
+      })
+      .attr("fill", "#F00");
+
+    this.linkVis.selectAll(".link").data(links)
+      .enter()
+      .append("svg:path")
+      .attr("class", "link")
+      .style("stroke-width", 5)
+      .style("stroke", "blue")
+      .style("fill", "none")
+      .style("opacity", 0.5)
+      .attr("d", function(d) {
+        return path(arc({
+          source: [d.source.lon, d.source.lat],
+          target: [d.target.lon, d.target.lat]
+        }));
+      });
   }
 };
