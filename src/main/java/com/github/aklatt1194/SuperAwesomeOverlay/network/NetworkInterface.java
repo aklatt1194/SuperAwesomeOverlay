@@ -12,11 +12,9 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.SynchronousQueue;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.OverlayRoutingManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
@@ -129,14 +127,7 @@ public class NetworkInterface implements Runnable {
                 }
 
                 while (!nodesToRemove.isEmpty()) {
-                    InetAddress addr = nodesToRemove.poll();
-
-                    SocketChannel socketChannel = tcpLinkTable.remove(addr);
-                    if (socketChannel != null) {
-                        socketChannel.keyFor(selector).cancel();
-                        socketChannel.close();
-                        model.deleteNode(addr);
-                    }
+                    removeNode(nodesToRemove.poll());
                 }
 
                 Iterator<SelectionKey> selectedKeys = this.selector
@@ -162,6 +153,24 @@ public class NetworkInterface implements Runnable {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    // Private helper to remove node from selector, table, and model
+    private void removeNode(InetAddress addr) {
+        SocketChannel socketChannel = tcpLinkTable.get(addr.getHostAddress());
+        
+        // get rid of any buffers that this channel may have had
+        pendingReads.remove(socketChannel);
+        pendingWrites.remove(socketChannel);
+        
+        if (socketChannel != null) {
+            socketChannel.keyFor(selector).cancel();
+            try {
+                socketChannel.close();
+            } catch (IOException e) {
+            }
+            model.deleteNode(addr);
         }
     }
 
@@ -222,7 +231,7 @@ public class NetworkInterface implements Runnable {
         }
     }
 
-    private void read(SelectionKey key) throws IOException {
+    private void read(SelectionKey key) {
         SocketChannel socketChannel = (SocketChannel) key.channel();
 
         // clear out the read buffer then do the read
@@ -231,16 +240,13 @@ public class NetworkInterface implements Runnable {
         try {
             numRead = socketChannel.read(this.readBuffer);
         } catch (IOException e) {
-            // remove the key and close the socket channel
-            key.cancel();
-            socketChannel.close();
+            removeNode(socketChannel.socket().getInetAddress());
             return;
         }
 
         if (numRead == -1) {
             // Remote closed socket cleanly
-            key.cancel();
-            socketChannel.close();
+            removeNode(socketChannel.socket().getInetAddress());
             return;
         }
 
@@ -294,14 +300,21 @@ public class NetworkInterface implements Runnable {
     }
 
     // pull any pending writes of a socket's queue and write them to the socket
-    private void write(SelectionKey key) throws IOException {
+    private void write(SelectionKey key) {
         SocketChannel socketChannel = (SocketChannel) key.channel();
         BlockingQueue<ByteBuffer> queue = pendingWrites.get(socketChannel);
 
         while (!queue.isEmpty()) {
             ByteBuffer buf = queue.peek();
 
-            socketChannel.write(buf);
+            try {
+                socketChannel.write(buf);
+            } catch (IOException e) {
+                // If an exception occurs during a write, the node is probably gone
+                removeNode(socketChannel.socket().getInetAddress());
+                return;
+            }
+
             if (buf.remaining() > 0) {
                 // the socket buffer is full
                 break;
