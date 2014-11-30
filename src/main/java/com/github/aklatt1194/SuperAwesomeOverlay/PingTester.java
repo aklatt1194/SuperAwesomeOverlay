@@ -62,7 +62,13 @@ public class PingTester {
         @Override
         public void run() {
             while (true) {
-                SimpleDatagramPacket response = socket.receive();
+                SimpleDatagramPacket response;
+                try {
+                    response = socket.receive();
+                } catch (InterruptedException e1) {
+                    continue;
+                }
+                
                 ByteBuffer buf = ByteBuffer.wrap(response.getPayload());
                 byte flags = buf.get();
 

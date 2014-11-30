@@ -68,7 +68,7 @@ public class OverlayRoutingModel {
 
     public synchronized void notifyNodeListeners() {
         for (OverlayRoutingModelListener listener : listeners) {
-            listener.nodeAddCallback();
+            listener.nodeChangeCallback();
         }
     }
 
@@ -130,10 +130,10 @@ public class OverlayRoutingModel {
             indexToNode[nodeToIndex.get(addr)] = null;
             nodeToIndex.remove(addr);
         }
-        
+
         // remove the node immediately from the tree
         triggerFullUpdate();
-        
+
         notifyNodeListeners();
     }
 
@@ -182,6 +182,13 @@ public class OverlayRoutingModel {
     private void updateMetrics(TopologyUpdate update) {
         InetAddress src = update.src;
         Map<InetAddress, Double> values = update.metrics;
+
+        if (src == null) {
+            // TODO -- It is possible that a node sent a link state packet, that
+            // packet got queued, and then the node disconnected before we got
+            // to this point?
+            return;
+        }
 
         int row = nodeToIndex.get(src);
 

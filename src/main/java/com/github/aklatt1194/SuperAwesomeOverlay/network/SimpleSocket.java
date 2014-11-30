@@ -27,19 +27,10 @@ public abstract class SimpleSocket {
 
     public abstract void send(SimpleDatagramPacket packet) throws IOException;
 
-    public SimpleDatagramPacket receive() {
-        SimpleDatagramPacket packet;
-        while (true) {
-            try {
-                packet = readQueue.take();
-                break;
-            } catch (InterruptedException e) {
-                continue;
-            }
-        }
-        return packet;
+    public SimpleDatagramPacket receive() throws InterruptedException {
+        return readQueue.take();
     }
-    
+
     public SimpleDatagramPacket receive(long timeout) {
         SimpleDatagramPacket packet = null;
         long last = System.currentTimeMillis();
@@ -58,7 +49,7 @@ public abstract class SimpleSocket {
     public void close() {
         NetworkInterface.getInstance().closeSocket(this);
     }
-    
+
     public int getPort() {
         return port;
     }
