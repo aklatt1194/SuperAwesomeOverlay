@@ -16,7 +16,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.OverlayRoutingManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class NetworkInterface implements Runnable {
@@ -30,7 +29,6 @@ public class NetworkInterface implements Runnable {
     private static NetworkInterface instance = null;
 
     private OverlayRoutingModel model;
-    private OverlayRoutingManager overlayRoutingManager;
     private Map<String, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
 
@@ -201,11 +199,6 @@ public class NetworkInterface implements Runnable {
         // add this newly connected node to model
         model.addNode(addr);
 
-        // TODO Verify this. I have no idea what I am doing here... could be
-        // very wrong!
-        // Notify the OverlayRoutingManager to do a forced ls update
-        overlayRoutingManager.getAndSetForceLinkState(true);
-
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
     }
@@ -219,12 +212,8 @@ public class NetworkInterface implements Runnable {
 
             InetAddress addr = socketChannel.socket().getInetAddress();
             tcpLinkTable.put(addr.getHostAddress(), socketChannel);
-            model.addNode(addr);
             socketChannel.register(selector, SelectionKey.OP_READ);
-
-            // TODO -- think this through. It might be better for the manager to
-            // listen to the model for any nodes being added.
-            overlayRoutingManager.getAndSetForceLinkState(true);
+            model.addNode(addr);
         } catch (IOException e) {
             // connecting to this node didn't work out so well
             socketChannel.keyFor(selector).cancel();
@@ -410,15 +399,7 @@ public class NetworkInterface implements Runnable {
             selector.wakeup();
         }
     }
-
-    /**
-     * Register an overlayroutingmanager for callbacks
-     */
-    public synchronized void registerOverlayRoutingManager(
-            OverlayRoutingManager orm) {
-        this.overlayRoutingManager = orm;
-    }
-
+    
     /**
      * A thread that multiplexes incoming packets to the correct ports
      */

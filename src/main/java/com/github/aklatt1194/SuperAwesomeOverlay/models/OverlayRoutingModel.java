@@ -16,9 +16,10 @@ import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class OverlayRoutingModel {
-    
     public static final int DEFAULT_METRIC = 1000;
-    
+
+    public List<OverlayRoutingModelListener> listeners;
+
     // Used for managing the matrix of metrics
     private Queue<TopologyUpdate> pendingUpdates;
     private Queue<InetAddress> nodesToRemove;
@@ -42,6 +43,8 @@ public class OverlayRoutingModel {
             System.exit(1);
         }
 
+        listeners = new ArrayList<>();
+
         // Initially, we are the only known node
         nodeToIndex = new HashMap<InetAddress, Integer>();
         indexToNode = new InetAddress[] { selfAddress };
@@ -60,7 +63,17 @@ public class OverlayRoutingModel {
             }
         }
     }
-    
+
+    public synchronized void addListener(OverlayRoutingModelListener listener) {
+        listeners.add(listener);
+    }
+
+    public synchronized void notifyNodeListeners() {
+        for (OverlayRoutingModelListener listener : listeners) {
+            listener.nodeChangeCallback();
+        }
+    }
+
     /**
      * The lazy update method used for each link state packet
      */
@@ -75,29 +88,31 @@ public class OverlayRoutingModel {
         // Add this update to the pending queue
         pendingUpdates.add(update);
     }
-    
+
     /**
      * Trigger all of the batched link state updates to rebuild the model
      */
     public synchronized void triggerFullUpdate() {
-        // Do a more explicit delete (still lazyish as it does not fully take effect
-        // until we rebuild the matrix). For the purposes of knownNeighborNodes it does
+        // Do a more explicit delete (still lazyish as it does not fully take
+        // effect
+        // until we rebuild the matrix). For the purposes of knownNeighborNodes
+        // it does
         // do a complete remove however.
         while (!nodesToRemove.isEmpty()) {
             removeNodeHelper(nodesToRemove.remove());
         }
-        
+
         // Rebuild the matrix
         rebuildMatrix();
-        
+
         // Apply all of the new info from the link state packets
         while (!pendingUpdates.isEmpty()) {
             updateMetrics(pendingUpdates.remove());
         }
-        
+
         // Build the tree
         buildMst();
-        
+
         // Build the forwarding table
         constructForwardingTable();
     }
@@ -109,17 +124,20 @@ public class OverlayRoutingModel {
     public synchronized void addNode(InetAddress addr) {
         if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
             nodesToAdd.add(addr);
+            notifyNodeListeners();
         }
     }
-    
+
     /**
      * Lazy remove a node. (Only call this if you are going to update right
-     * adter).
+     * after).
      */
     public synchronized void deleteNode(InetAddress addr) {
-        if (!nodesToAdd.contains(addr) && nodeToIndex.containsKey(addr) && 
-                !nodesToRemove.contains(addr))
+        if (!nodesToAdd.contains(addr) && nodeToIndex.containsKey(addr)
+                && !nodesToRemove.contains(addr)) {
             nodesToRemove.add(addr);
+            notifyNodeListeners();
+        }
     }
 
     /**
@@ -159,7 +177,7 @@ public class OverlayRoutingModel {
     public synchronized InetAddress getSelfAddress() {
         return selfAddress;
     }
-    
+
     /**
      * Helper method called by triggerFullUpdate to delete nodes (still lazyish)
      */
@@ -177,7 +195,7 @@ public class OverlayRoutingModel {
     private void updateMetrics(TopologyUpdate update) {
         InetAddress src = update.src;
         Map<InetAddress, Double> values = update.metrics;
-        
+
         int row = nodeToIndex.get(src);
 
         // Update the metrics

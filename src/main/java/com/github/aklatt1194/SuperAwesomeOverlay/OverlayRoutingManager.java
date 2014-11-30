@@ -10,12 +10,13 @@ import java.util.Set;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModelListener;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.BaseLayerSocket;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
-public class OverlayRoutingManager implements Runnable {
+public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListener {
     public static final int ROUTING_UPDATE_SIZE = 8192;
     public static final int PORT = 55555;
     public static final long LINK_STATE_PERIOD = 1000 * 60; // 60 sec
@@ -36,7 +37,9 @@ public class OverlayRoutingManager implements Runnable {
         this.model = model;
         this.socket = new BaseLayerSocket();
         this.socket.bind(PORT);
-        NetworkInterface.getInstance().registerOverlayRoutingManager(this);
+        
+        model.addListener(this);
+        
         new Thread(this).start();
     }
 
@@ -181,10 +184,15 @@ public class OverlayRoutingManager implements Runnable {
         return avg;
     }
     
+    @Override
+    public void nodeChangeCallback() {
+        getAndSetForceLinkState(true);
+    }
+    
     /**
      * Used to force a link state update
      */
-    public synchronized boolean getAndSetForceLinkState(boolean val) {
+    private synchronized boolean getAndSetForceLinkState(boolean val) {
         boolean res = forceLinkState;
         forceLinkState = val;
         return res;
