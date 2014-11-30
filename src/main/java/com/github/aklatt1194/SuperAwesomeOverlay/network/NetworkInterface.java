@@ -43,8 +43,8 @@ public class NetworkInterface implements Runnable {
     private Map<SocketChannel, BlockingQueue<ByteBuffer>> pendingWrites;
     private Map<SocketChannel, ByteBuffer> pendingReads;
 
-    private Queue<InetAddress> potentialNodes;
-    private Queue<InetAddress> nodesToRemove;
+    private BlockingQueue<InetAddress> potentialNodes;
+    private BlockingQueue<InetAddress> nodesToRemove;
 
     public static NetworkInterface getInstance() {
         if (instance == null)
@@ -71,8 +71,8 @@ public class NetworkInterface implements Runnable {
         selector = SelectorProvider.provider().openSelector();
 
         // any potentially new nodes that the interface should connect to
-        potentialNodes = new SynchronousQueue<>();
-        nodesToRemove = new SynchronousQueue<>();
+        potentialNodes = new LinkedBlockingQueue<>();
+        nodesToRemove = new LinkedBlockingQueue<>();
 
         // create the serverChannel and register it with the selector
         ServerSocketChannel serverChannel = ServerSocketChannel.open();
@@ -127,15 +127,16 @@ public class NetworkInterface implements Runnable {
                                 SelectionKey.OP_CONNECT);
                     }
                 }
-                
+
                 while (!nodesToRemove.isEmpty()) {
                     InetAddress addr = nodesToRemove.poll();
-                    
+
                     SocketChannel socketChannel = tcpLinkTable.remove(addr);
-                    socketChannel.keyFor(selector).cancel();
-                    socketChannel.close();
-                    
-                    model.deleteNode(addr);
+                    if (socketChannel != null) {
+                        socketChannel.keyFor(selector).cancel();
+                        socketChannel.close();
+                        model.deleteNode(addr);
+                    }
                 }
 
                 Iterator<SelectionKey> selectedKeys = this.selector
@@ -389,8 +390,12 @@ public class NetworkInterface implements Runnable {
      * @param addr The node to attempt to disconnect from and remove
      */
     public void disconnectFromNode(InetAddress addr) {
-        nodesToRemove.add(addr);
-        selector.wakeup();
+        if (tcpLinkTable.containsKey(addr)) {
+            // let's check that it is actually in the table before we bother
+            // waking the selector up
+            nodesToRemove.add(addr);
+            selector.wakeup();
+        }
     }
 
     /**
