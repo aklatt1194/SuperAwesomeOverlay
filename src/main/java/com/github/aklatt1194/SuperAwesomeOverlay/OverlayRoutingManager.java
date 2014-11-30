@@ -28,11 +28,9 @@ public class OverlayRoutingManager implements Runnable {
     private MetricsDatabaseManager db;
     private OverlayRoutingModel model;
     private long lastLinkState;
-    private NetworkInterface netInterface;
     
     public OverlayRoutingManager(OverlayRoutingModel model, MetricsDatabaseManager db) {
         this.forceLinkState = true;
-        this.netInterface = netInterface;
         this.lastLinkState = 0;
         this.db = db;
         this.model = model;
@@ -96,7 +94,7 @@ public class OverlayRoutingManager implements Runnable {
                 if (packet == null) {
                     // Disconnect from the remaining nodes
                     for (InetAddress node : expected) {
-                        netInterface.disconnectFromNode(node);
+                        NetworkInterface.getInstance().disconnectFromNode(node);
                     }
                         
                     break;

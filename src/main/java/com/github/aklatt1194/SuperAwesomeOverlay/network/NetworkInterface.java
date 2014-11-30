@@ -12,17 +12,18 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.OverlayRoutingManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
-import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class NetworkInterface implements Runnable {
     public static final String[] NODES_BOOTSTRAP = {
-            //"c-174-61-223-52.hsd1.wa.comcast.net", // for testing purposes
+            // "c-174-61-223-52.hsd1.wa.comcast.net", // for testing purposes
             "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com",
             "ec2-54-64-177-145.ap-northeast-1.compute.amazonaws.com",
             "ec2-54-172-69-181.compute-1.amazonaws.com" };
@@ -34,9 +35,7 @@ public class NetworkInterface implements Runnable {
     private OverlayRoutingManager overlayRoutingManager;
     private Map<String, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
-    private Map<InetAddress, SocketChannel> newSocketChannels;
 
-    private ServerSocketChannel serverChannel;
     private Selector selector;
     private ByteBuffer readBuffer;
     private BlockingQueue<ServerDataEvent> readPackets;
@@ -44,10 +43,12 @@ public class NetworkInterface implements Runnable {
     private Map<SocketChannel, BlockingQueue<ByteBuffer>> pendingWrites;
     private Map<SocketChannel, ByteBuffer> pendingReads;
 
+    private Queue<InetAddress> potentialNodes;
+    private Queue<InetAddress> nodesToRemove;
+
     public static NetworkInterface getInstance() {
         if (instance == null)
             instance = new NetworkInterface();
-
         return instance;
     }
 
@@ -58,67 +59,26 @@ public class NetworkInterface implements Runnable {
         this.model = model;
         tcpLinkTable = new ConcurrentHashMap<>();
         portMap = new ConcurrentHashMap<>();
-        newSocketChannels = new ConcurrentHashMap<>();
 
+        // various buffers to keep track of read/writes
         readBuffer = ByteBuffer.allocateDirect(8192);
         readPackets = new LinkedBlockingQueue<>();
         pendingRequests = new LinkedBlockingQueue<>();
         pendingWrites = new ConcurrentHashMap<>();
         pendingReads = new ConcurrentHashMap<>();
 
-        // create the serverChannel and selector
-        serverChannel = ServerSocketChannel.open();
-        serverChannel.configureBlocking(false);
+        // the main selector that we will use
         selector = SelectorProvider.provider().openSelector();
-        InetSocketAddress isa = new InetSocketAddress(LINK_PORT);
 
-        serverChannel.socket().bind(isa);
+        // any potentially new nodes that the interface should connect to
+        potentialNodes = new SynchronousQueue<>();
+        nodesToRemove = new SynchronousQueue<>();
+
+        // create the serverChannel and register it with the selector
+        ServerSocketChannel serverChannel = ServerSocketChannel.open();
+        serverChannel.configureBlocking(false);
+        serverChannel.socket().bind(new InetSocketAddress(LINK_PORT));
         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-
-        // try to connect to each of the bootstrap nodes
-        Selector connectSelector = SelectorProvider.provider().openSelector();
-        for (String node : NODES_BOOTSTRAP) {
-            InetAddress addr = InetAddress.getByName(node);
-
-            if (IPUtils.compareIPs(addr, model.getSelfAddress()) != 0) {
-                SocketChannel socketChannel = SocketChannel.open();
-                socketChannel.configureBlocking(false);
-
-                socketChannel.connect(new InetSocketAddress(addr, LINK_PORT));
-                socketChannel
-                        .register(connectSelector, SelectionKey.OP_CONNECT);
-            }
-        }
-
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        // finish connecting to connectable nodes, giveup after 1000 ms
-        for (int i = 0; i < NODES_BOOTSTRAP.length
-                && connectSelector.select(1000) > 0; i++) {
-            for (SelectionKey key : connectSelector.selectedKeys()) {
-                SocketChannel channel = (SocketChannel) key.channel();
-
-                if (key.isConnectable()) {
-                    if (channel.isConnectionPending()) {
-                        try {
-                            channel.finishConnect();
-                            // we are now connected
-                            model.addNode(channel.socket().getInetAddress());
-                            channel.register(selector, SelectionKey.OP_READ);
-                            tcpLinkTable.put(channel.socket().getInetAddress()
-                                    .getHostAddress(), channel);
-                        } catch (Exception e) {
-                            // connection failed
-                        }
-                    }
-                }
-            }
-        }
-        connectSelector.close();
 
         // start the main thread
         Thread thread = new Thread(this);
@@ -127,6 +87,11 @@ public class NetworkInterface implements Runnable {
         // start up the packet router
         thread = new Thread(new PacketRouter());
         thread.start();
+
+        // try to connect to any of the bootstrap nodes (hopefull at least one)
+        for (String node : NODES_BOOTSTRAP) {
+            connectAndAdd(InetAddress.getByName(node));
+        }
     }
 
     @Override
@@ -144,6 +109,26 @@ public class NetworkInterface implements Runnable {
                 // wait for an event
                 this.selector.select();
 
+                while (!potentialNodes.isEmpty()) {
+                    // the selector must have been woke up by connectAndAdd
+                    // we must add any keys to the selector in the same thread
+                    // that we call select()
+                    InetAddress addr = potentialNodes.poll();
+                    SocketChannel socketChannel = SocketChannel.open();
+                    socketChannel.configureBlocking(false);
+
+                    boolean result = socketChannel
+                            .connect(new InetSocketAddress(addr, LINK_PORT));
+                    if (result) {
+                        System.err
+                                .println("The node is attempting to connect to itself!");
+                        socketChannel.close();
+                    } else {
+                        socketChannel.register(selector,
+                                SelectionKey.OP_CONNECT);
+                    }
+                }
+
                 Iterator<SelectionKey> selectedKeys = this.selector
                         .selectedKeys().iterator();
                 while (selectedKeys.hasNext()) {
@@ -155,17 +140,13 @@ public class NetworkInterface implements Runnable {
 
                     if (key.isAcceptable()) {
                         this.accept(key);
+                    } else if (key.isConnectable()) {
+                        this.connect(key);
                     } else if (key.isReadable()) {
                         this.read(key);
                     } else if (key.isWritable()) {
                         this.write(key);
                     }
-                }
-
-                // add any new connections to the selector
-                for (InetAddress addr : newSocketChannels.keySet()) {
-                    newSocketChannels.remove(addr).register(selector,
-                            SelectionKey.OP_READ);
                 }
 
             } catch (Exception e) {
@@ -176,7 +157,7 @@ public class NetworkInterface implements Runnable {
 
     // Accept a new connection. Save this socket in the tcpLinkTable and then
     // add it to the selector.
-    private synchronized void accept(SelectionKey key) throws IOException {
+    private void accept(SelectionKey key) throws IOException {
         ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key
                 .channel();
 
@@ -200,17 +181,38 @@ public class NetworkInterface implements Runnable {
 
         // add this newly connected node to model
         model.addNode(addr);
-        
-        // TODO Verify this. I have no idea what I am doing here... could be very wrong!
+
+        // TODO Verify this. I have no idea what I am doing here... could be
+        // very wrong!
         // Notify the OverlayRoutingManager to do a forced ls update
         overlayRoutingManager.getAndSetForceLinkState(true);
-        
 
         // set selector to notify when data is to be read
         socketChannel.register(this.selector, SelectionKey.OP_READ);
     }
 
-    private synchronized void read(SelectionKey key) throws IOException {
+    // Finish connecting to a remote node
+    private void connect(SelectionKey key) {
+        SocketChannel socketChannel = (SocketChannel) key.channel();
+
+        try {
+            socketChannel.finishConnect();
+
+            InetAddress addr = socketChannel.socket().getInetAddress();
+            tcpLinkTable.put(addr.getHostAddress(), socketChannel);
+            model.addNode(addr);
+            socketChannel.register(selector, SelectionKey.OP_READ);
+
+            // TODO -- think this through. It might be better for the manager to
+            // listen to the model for any nodes being added.
+            overlayRoutingManager.getAndSetForceLinkState(true);
+        } catch (IOException e) {
+            // connecting to this node didn't work out so well
+            socketChannel.keyFor(selector).cancel();
+        }
+    }
+
+    private void read(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
 
         // clear out the read buffer then do the read
@@ -281,8 +283,29 @@ public class NetworkInterface implements Runnable {
         }
     }
 
+    // pull any pending writes of a socket's queue and write them to the socket
+    private void write(SelectionKey key) throws IOException {
+        SocketChannel socketChannel = (SocketChannel) key.channel();
+        BlockingQueue<ByteBuffer> queue = pendingWrites.get(socketChannel);
+
+        while (!queue.isEmpty()) {
+            ByteBuffer buf = queue.peek();
+
+            socketChannel.write(buf);
+            if (buf.remaining() > 0) {
+                // the socket buffer is full
+                break;
+            }
+            queue.remove();
+        }
+
+        // we are done, set the key back to read
+        if (queue.isEmpty())
+            key.interestOps(SelectionKey.OP_READ);
+    }
+
     // Queues up a packet so that it can be sent by the selector
-    protected synchronized void send(SimpleDatagramPacket packet) {
+    protected void send(SimpleDatagramPacket packet) {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
         SocketChannel socket = tcpLinkTable.get(packet.getDestination()
@@ -324,27 +347,6 @@ public class NetworkInterface implements Runnable {
         selector.wakeup();
     }
 
-    // pull any pending writes of a socket's queue and write them to the socket
-    private synchronized void write(SelectionKey key) throws IOException {
-        SocketChannel socketChannel = (SocketChannel) key.channel();
-        BlockingQueue<ByteBuffer> queue = pendingWrites.get(socketChannel);
-
-        while (!queue.isEmpty()) {
-            ByteBuffer buf = queue.peek();
-
-            socketChannel.write(buf);
-            if (buf.remaining() > 0) {
-                // the socket buffer is full
-                break;
-            }
-            queue.remove();
-        }
-
-        // we are done, set the key back to read
-        if (queue.isEmpty())
-            key.interestOps(SelectionKey.OP_READ);
-    }
-
     // bind a SimpleSocket to a specific port
     protected void bindSocket(SimpleSocket simpleSocket, int port)
             throws SocketException {
@@ -359,50 +361,34 @@ public class NetworkInterface implements Runnable {
     protected void closeSocket(SimpleSocket simpleSocket) {
         portMap.remove(simpleSocket);
     }
-    
+
     /**
-     * Try to open a TCP connection to the given address and add the node to
-     * the model if we are successful
+     * Try to open a TCP connection to the given address and add the node to the
+     * model if we are successful
      * 
      * @param addr The node to attempt to connect to and add
      */
-    public synchronized void connectAndAdd(InetAddress addr) {
-        // TODO Verify this. I have no idea what I am doing here... could be very wrong!
-        try {
-            SocketChannel socketChannel = SocketChannel.open();
-            socketChannel.configureBlocking(false);
-            socketChannel.connect(new InetSocketAddress(addr, LINK_PORT));
-            tcpLinkTable.put(addr.getHostAddress(), socketChannel);
-            newSocketChannels.put(addr, socketChannel);
-        } catch (IOException e) {
-            // Failed to connect
-            return;
-        }
-        
-        model.addNode(addr);
+    public void connectAndAdd(InetAddress addr) {
+        potentialNodes.add(addr);
+        selector.wakeup();
     }
-    
+
     /**
-     * Try to disconnect (close the TCP connection) to the given node and
-     * if successful remove it from the known nodes
+     * Try to disconnect (close the TCP connection) to the given node and if
+     * successful remove it from the known nodes
      * 
      * @param addr The node to attempt to disconnect from and remove
      */
-    public synchronized void disconnectFromNode(InetAddress addr) {
-        // TODO Verify this. I have no idea what I am doing here... could be very wrong!
-        SocketChannel chan = tcpLinkTable.remove(addr.getHostAddress());
-        try {
-            chan.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        model.deleteNode(addr);
+    public void disconnectFromNode(InetAddress addr) {
+        nodesToRemove.add(addr);
+        selector.wakeup();
     }
-    
+
     /**
      * Register an overlayroutingmanager for callbacks
      */
-    public synchronized void registerOverlayRoutingManager(OverlayRoutingManager orm) {
+    public synchronized void registerOverlayRoutingManager(
+            OverlayRoutingManager orm) {
         this.overlayRoutingManager = orm;
     }
 
