@@ -110,7 +110,6 @@ public class NetworkInterface implements Runnable {
                 this.selector.select();
 
                 while (!potentialNodes.isEmpty()) {
-                    // the selector must have been woke up by connectAndAdd
                     // we must add any keys to the selector in the same thread
                     // that we call select()
                     InetAddress addr = potentialNodes.poll();
@@ -127,6 +126,16 @@ public class NetworkInterface implements Runnable {
                         socketChannel.register(selector,
                                 SelectionKey.OP_CONNECT);
                     }
+                }
+                
+                while (!nodesToRemove.isEmpty()) {
+                    InetAddress addr = nodesToRemove.poll();
+                    
+                    SocketChannel socketChannel = tcpLinkTable.remove(addr);
+                    socketChannel.keyFor(selector).cancel();
+                    socketChannel.close();
+                    
+                    model.deleteNode(addr);
                 }
 
                 Iterator<SelectionKey> selectedKeys = this.selector
