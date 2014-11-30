@@ -125,7 +125,22 @@ public class NetworkInterface implements Runnable {
                 }
 
                 while (!nodesToRemove.isEmpty()) {
-                    removeNode(nodesToRemove.poll());
+                    InetAddress addr = nodesToRemove.poll();
+                    SocketChannel socketChannel = tcpLinkTable.remove(addr
+                            .getHostAddress());
+
+                    if (socketChannel != null) {
+                        // get rid of any buffers that this channel may have had
+                        pendingReads.remove(socketChannel);
+                        pendingWrites.remove(socketChannel);
+
+                        socketChannel.keyFor(selector).cancel();
+                        try {
+                            socketChannel.close();
+                        } catch (IOException e) {
+                        }
+                        model.deleteNode(addr);
+                    }
                 }
 
                 Iterator<SelectionKey> selectedKeys = this.selector
@@ -151,24 +166,6 @@ public class NetworkInterface implements Runnable {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }
-    }
-
-    // Private helper to remove node from selector, table, and model
-    private void removeNode(InetAddress addr) {
-        SocketChannel socketChannel = tcpLinkTable.get(addr.getHostAddress());
-        
-        // get rid of any buffers that this channel may have had
-        pendingReads.remove(socketChannel);
-        pendingWrites.remove(socketChannel);
-        
-        if (socketChannel != null) {
-            socketChannel.keyFor(selector).cancel();
-            try {
-                socketChannel.close();
-            } catch (IOException e) {
-            }
-            model.deleteNode(addr);
         }
     }
 
@@ -229,13 +226,23 @@ public class NetworkInterface implements Runnable {
         try {
             numRead = socketChannel.read(this.readBuffer);
         } catch (IOException e) {
-            removeNode(socketChannel.socket().getInetAddress());
             return;
         }
 
         if (numRead == -1) {
             // Remote closed socket cleanly
-            removeNode(socketChannel.socket().getInetAddress());
+            pendingReads.remove(socketChannel);
+            pendingWrites.remove(socketChannel);
+            try {
+                socketChannel.close();
+            } catch (IOException e) {
+            }
+            key.cancel();
+
+            InetAddress addr = socketChannel.socket().getInetAddress();
+            model.deleteNode(addr);
+            tcpLinkTable.remove(addr);
+
             return;
         }
 
@@ -299,8 +306,8 @@ public class NetworkInterface implements Runnable {
             try {
                 socketChannel.write(buf);
             } catch (IOException e) {
-                // If an exception occurs during a write, the node is probably gone
-                removeNode(socketChannel.socket().getInetAddress());
+                // If an exception occurs during a write, the node is probably
+                // gone
                 return;
             }
 
@@ -317,16 +324,17 @@ public class NetworkInterface implements Runnable {
     }
 
     // Queues up a packet so that it can be sent by the selector
-    protected void send(SimpleDatagramPacket packet) {
+    protected void send(SimpleDatagramPacket packet) throws IOException {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
+
         SocketChannel socket = tcpLinkTable.get(packet.getDestination()
                 .getHostAddress());
 
         if (socket == null) {
             // we aren't actually connected to the destination
             // TODO:
-            return;
+            throw new IOException();
         }
 
         while (true) {
@@ -399,7 +407,7 @@ public class NetworkInterface implements Runnable {
             selector.wakeup();
         }
     }
-    
+
     /**
      * A thread that multiplexes incoming packets to the correct ports
      */

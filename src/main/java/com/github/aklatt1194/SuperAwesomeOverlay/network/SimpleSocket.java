@@ -1,5 +1,6 @@
 package com.github.aklatt1194.SuperAwesomeOverlay.network;
 
+import java.io.IOException;
 import java.net.SocketException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -24,7 +25,7 @@ public abstract class SimpleSocket {
         }
     }
 
-    public abstract void send(SimpleDatagramPacket packet);
+    public abstract void send(SimpleDatagramPacket packet) throws IOException;
 
     public SimpleDatagramPacket receive() {
         SimpleDatagramPacket packet;

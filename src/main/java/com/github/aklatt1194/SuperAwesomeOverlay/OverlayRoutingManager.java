@@ -1,5 +1,6 @@
 package com.github.aklatt1194.SuperAwesomeOverlay;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -125,7 +126,11 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
         for (InetAddress dst : dests) {
             SimpleDatagramPacket packet = new SimpleDatagramPacket(upd.src, 
                     dst, PORT, PORT, upd.serialize());
-            socket.send(packet);
+            try {
+                socket.send(packet);
+            } catch (IOException e) {
+                // TODO -- not connected to this host
+            }
         }
         
         // Update when we sent the last link state update (i.e. just now)
@@ -185,7 +190,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
     }
     
     @Override
-    public void nodeChangeCallback() {
+    public void nodeAddCallback() {
         getAndSetForceLinkState(true);
     }
     

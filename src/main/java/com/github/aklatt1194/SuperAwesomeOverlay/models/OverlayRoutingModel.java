@@ -22,7 +22,6 @@ public class OverlayRoutingModel {
 
     // Used for managing the matrix of metrics
     private Queue<TopologyUpdate> pendingUpdates;
-    private Queue<InetAddress> nodesToRemove;
     private Queue<InetAddress> nodesToAdd;
     private Map<InetAddress, Integer> nodeToIndex;
     private InetAddress[] indexToNode;
@@ -52,7 +51,6 @@ public class OverlayRoutingModel {
 
         pendingUpdates = new LinkedList<TopologyUpdate>();
         nodesToAdd = new LinkedList<InetAddress>();
-        nodesToRemove = new LinkedList<InetAddress>();
 
         metrics = new double[nodeToIndex.size()][nodeToIndex.size()];
 
@@ -70,7 +68,7 @@ public class OverlayRoutingModel {
 
     public synchronized void notifyNodeListeners() {
         for (OverlayRoutingModelListener listener : listeners) {
-            listener.nodeChangeCallback();
+            listener.nodeAddCallback();
         }
     }
 
@@ -93,15 +91,6 @@ public class OverlayRoutingModel {
      * Trigger all of the batched link state updates to rebuild the model
      */
     public synchronized void triggerFullUpdate() {
-        // Do a more explicit delete (still lazyish as it does not fully take
-        // effect
-        // until we rebuild the matrix). For the purposes of knownNeighborNodes
-        // it does
-        // do a complete remove however.
-        while (!nodesToRemove.isEmpty()) {
-            removeNodeHelper(nodesToRemove.remove());
-        }
-
         // Rebuild the matrix
         rebuildMatrix();
 
@@ -129,15 +118,23 @@ public class OverlayRoutingModel {
     }
 
     /**
-     * Lazy remove a node. (Only call this if you are going to update right
-     * after).
+     * Delete a node and rebuild the model.
+     * 
+     * TODO -- Let's try the not lazy delete. It seems that if the
+     * NetworkInterface has lost a connection to a node, we need to rebuild
+     * immediately. If the lost node was adjacent to this node, the tree would
+     * then be disconnected and we shouldn't wait around for an update.
      */
     public synchronized void deleteNode(InetAddress addr) {
-        if (!nodesToAdd.contains(addr) && nodeToIndex.containsKey(addr)
-                && !nodesToRemove.contains(addr)) {
-            nodesToRemove.add(addr);
-            notifyNodeListeners();
+        if (nodeToIndex.containsKey(addr)) {
+            indexToNode[nodeToIndex.get(addr)] = null;
+            nodeToIndex.remove(addr);
         }
+        
+        // remove the node immediately from the tree
+        triggerFullUpdate();
+        
+        notifyNodeListeners();
     }
 
     /**
@@ -176,16 +173,6 @@ public class OverlayRoutingModel {
 
     public synchronized InetAddress getSelfAddress() {
         return selfAddress;
-    }
-
-    /**
-     * Helper method called by triggerFullUpdate to delete nodes (still lazyish)
-     */
-    private void removeNodeHelper(InetAddress addr) {
-        if (nodeToIndex.containsKey(addr)) {
-            indexToNode[nodeToIndex.get(addr)] = null;
-            nodeToIndex.remove(addr);
-        }
     }
 
     /**
