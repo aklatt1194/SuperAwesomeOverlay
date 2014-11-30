@@ -216,37 +216,41 @@ public class OverlayRoutingModel {
             newSize += (indexToNode[i] != null) ? 1 : 0;
         newSize += nodesToAdd.size();
 
+        List<InetAddress> newIndexToNode = new ArrayList<>();
+        Map<InetAddress, Integer> newNodeToIndex = new HashMap<>();
+
+        for (InetAddress node : indexToNode) {
+            if (node != null) {
+                newIndexToNode.add(node);
+                newNodeToIndex.put(node, newIndexToNode.size() - 1);
+            }
+        }
+
         // Create the new metrics matrix
         double[][] newMetrics = new double[newSize][newSize];
 
         // Populate the new matrix with the pertinent old metrics
         for (int i = 0; i < newSize; i++) {
             for (int j = 0; j < newSize; j++) {
-                if (j >= indexToNode.length || i >= indexToNode.length
-                        || indexToNode[j] == null || indexToNode[i] == null) {
+                if (j >= newIndexToNode.size() || i >= newIndexToNode.size()) {
                     newMetrics[i][j] = DEFAULT_METRIC;
                 } else {
-                    newMetrics[i][j] = metrics[i][j];
+                    newMetrics[i][j] = metrics[nodeToIndex.get(newIndexToNode
+                            .get(i))][nodeToIndex.get(newIndexToNode.get(j))];
                 }
             }
         }
-
-        // Create the new known nodes array and map
-        InetAddress[] newIndexToNode = new InetAddress[newSize];
-        Map<InetAddress, Integer> newNodeToIndex = new HashMap<InetAddress, Integer>();
-
-        // Populate the new known nodes array and map
-        for (int i = 0; i < newSize; i++) {
-            if (i >= indexToNode.length || indexToNode[i] == null)
-                newIndexToNode[i] = nodesToAdd.remove();
-            else
-                newIndexToNode[i] = indexToNode[i];
-
-            newNodeToIndex.put(newIndexToNode[i], i);
+        
+        // Assign indexes to the new nodes
+        for (InetAddress node : nodesToAdd) {
+            newIndexToNode.add(node);
+            newNodeToIndex.put(node, newIndexToNode.size() - 1);
         }
+        nodesToAdd.clear();
 
         metrics = newMetrics;
-        indexToNode = newIndexToNode;
+        indexToNode = new InetAddress[newIndexToNode.size()];
+        indexToNode = newIndexToNode.toArray(indexToNode);
         nodeToIndex = newNodeToIndex;
     }
 

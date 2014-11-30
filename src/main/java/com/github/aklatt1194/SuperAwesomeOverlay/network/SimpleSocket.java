@@ -27,8 +27,16 @@ public abstract class SimpleSocket {
 
     public abstract void send(SimpleDatagramPacket packet) throws IOException;
 
-    public SimpleDatagramPacket receive() throws InterruptedException {
-        return readQueue.take();
+    public SimpleDatagramPacket receive() {
+        SimpleDatagramPacket packet;
+        while (true) {
+            try {
+                packet = readQueue.take();
+            } catch (InterruptedException e) {
+                continue;
+            }
+            return packet;
+        }
     }
 
     public SimpleDatagramPacket receive(long timeout) {
@@ -44,6 +52,10 @@ public abstract class SimpleSocket {
             }
         }
         return packet;
+    }
+    
+    public SimpleDatagramPacket interruptibleReceive(long timeout) throws InterruptedException {
+        return readQueue.poll(timeout, TimeUnit.MILLISECONDS);
     }
 
     public void close() {

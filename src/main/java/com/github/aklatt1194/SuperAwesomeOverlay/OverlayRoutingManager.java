@@ -31,7 +31,7 @@ public class OverlayRoutingManager implements Runnable,
     private MetricsDatabaseManager db;
     private OverlayRoutingModel model;
     private long lastLinkState;
-    
+
     private Thread managerThread;
 
     public OverlayRoutingManager(OverlayRoutingModel model,
@@ -63,22 +63,21 @@ public class OverlayRoutingManager implements Runnable,
         Set<InetAddress> expected = null;
         while (true) {
             // Should we be initiating a link state update
-            if (forceLinkState
-                    || (System.currentTimeMillis() - lastLinkState) > LINK_STATE_PERIOD) {
+            if (forceLinkState || (System.currentTimeMillis() - lastLinkState) > LINK_STATE_PERIOD) {
                 sendLinkStateUpdate(model.getKnownNeighbors());
-                
                 forceLinkState = false;
-
+                
                 // Nodes we are expecting to receive ls updates from
                 expected = new HashSet<InetAddress>(model.getKnownNeighbors());
             } else {
                 // If we received a link state packet, initiate an update
                 SimpleDatagramPacket initPacket;
                 try {
-                    initPacket = socket.receive();
+                    initPacket = socket.interruptibleReceive(LINK_STATE_PERIOD - (System.currentTimeMillis() - lastLinkState));
+                    if (initPacket == null) {
+                        continue;
+                    }
                 } catch (InterruptedException e) {
-                    // if we have been interrupted, check to see if an update is
-                    // being explicitly called
                     continue;
                 }
 

@@ -47,7 +47,7 @@ public class PingTester {
                     SimpleDatagramPacket packet = new SimpleDatagramPacket(
                             model.getSelfAddress(), node, PORT, PORT,
                             buf.array());
-                    
+
                     try {
                         socket.send(packet);
                     } catch (IOException e) {
@@ -62,13 +62,8 @@ public class PingTester {
         @Override
         public void run() {
             while (true) {
-                SimpleDatagramPacket response;
-                try {
-                    response = socket.receive();
-                } catch (InterruptedException e1) {
-                    continue;
-                }
-                
+                SimpleDatagramPacket response = socket.receive();
+
                 ByteBuffer buf = ByteBuffer.wrap(response.getPayload());
                 byte flags = buf.get();
 
@@ -76,7 +71,9 @@ public class PingTester {
                     byte[] payload = buf.array();
                     payload[0] = RESPONSE;
                     try {
-                        socket.send(new SimpleDatagramPacket(model.getSelfAddress(), response.getSource(), PORT, PORT, payload));
+                        socket.send(new SimpleDatagramPacket(model
+                                .getSelfAddress(), response.getSource(), PORT,
+                                PORT, payload));
                     } catch (IOException e) {
                         // TODO -- This node is no longer connected
                     }
