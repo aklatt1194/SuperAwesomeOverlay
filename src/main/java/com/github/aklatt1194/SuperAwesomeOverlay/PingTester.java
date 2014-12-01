@@ -1,5 +1,6 @@
 package com.github.aklatt1194.SuperAwesomeOverlay;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Date;
@@ -46,7 +47,12 @@ public class PingTester {
                     SimpleDatagramPacket packet = new SimpleDatagramPacket(
                             model.getSelfAddress(), node, PORT, PORT,
                             buf.array());
-                    socket.send(packet);
+
+                    try {
+                        socket.send(packet);
+                    } catch (IOException e) {
+                        // TODO -- This node is no longer connected
+                    }
                 }
             }
         }
@@ -57,13 +63,20 @@ public class PingTester {
         public void run() {
             while (true) {
                 SimpleDatagramPacket response = socket.receive();
+
                 ByteBuffer buf = ByteBuffer.wrap(response.getPayload());
                 byte flags = buf.get();
 
                 if (flags == REQUEST) {
                     byte[] payload = buf.array();
                     payload[0] = RESPONSE;
-                    socket.send(new SimpleDatagramPacket(model.getSelfAddress(), response.getSource(), PORT, PORT, payload));
+                    try {
+                        socket.send(new SimpleDatagramPacket(model
+                                .getSelfAddress(), response.getSource(), PORT,
+                                PORT, payload));
+                    } catch (IOException e) {
+                        // TODO -- This node is no longer connected
+                    }
                 } else {
                     long timestamp = buf.getLong();
                     db.addLatencyData(response.getSource().getHostAddress(),

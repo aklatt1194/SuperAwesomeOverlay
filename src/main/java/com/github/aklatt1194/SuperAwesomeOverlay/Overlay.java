@@ -19,20 +19,21 @@ import com.github.aklatt1194.SuperAwesomeOverlay.views.WebRoutes;
 
 public class Overlay {
     public static void main(String[] args) throws DeploymentException {
-        MetricsDatabaseManager metricsdb = new MetricsDatabaseProvider("Metrics");
-        GeolocateDatabaseProvider geodb = new GeolocateDatabaseProvider(); 
-        
+        MetricsDatabaseManager metricsdb = new MetricsDatabaseProvider(
+                "Metrics");
+        GeolocateDatabaseProvider geodb = new GeolocateDatabaseProvider();
+
         // create routing table and initialize the network interface
         OverlayRoutingModel overlayRoutingModel = new OverlayRoutingModel();
-        
+
         try {
             NetworkInterface.getInstance().initialize(overlayRoutingModel);
         } catch (IOException e) {
             System.err.println("Unable to initialize network interface");
             System.exit(1);
         }
-        
-        OverlayRoutingManager overlayRoutingManager = new OverlayRoutingManager(overlayRoutingModel, metricsdb);
+
+        new OverlayRoutingManager(overlayRoutingModel, metricsdb);
 
         // web routes and endpoints
         new WebRoutes();
@@ -47,7 +48,7 @@ public class Overlay {
 
         // uncomment for extended logging
         // BasicConfigurator.configure();
-        
+
         new PingTester(overlayRoutingModel, metricsdb);
     }
 }

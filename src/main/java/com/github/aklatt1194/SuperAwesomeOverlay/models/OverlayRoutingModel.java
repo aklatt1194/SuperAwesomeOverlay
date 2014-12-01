@@ -11,17 +11,20 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 
+import com.github.aklatt1194.SuperAwesomeOverlay.OverlayRoutingManager.TopologyUpdate;
+import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
-// TODO we want want to try to batch our rebuilding of the tree and forwarding table
-// perhaps after receiving an update from each other node? Not sure if this is really
-// important, but we are doing a lot of rebuilding now.
-
 public class OverlayRoutingModel {
+    public static final int DEFAULT_METRIC = 1000;
+
+    public List<OverlayRoutingModelListener> listeners;
+
     // Used for managing the matrix of metrics
+    private Queue<TopologyUpdate> pendingUpdates;
     private Queue<InetAddress> nodesToAdd;
     private Map<InetAddress, Integer> nodeToIndex;
-    private InetAddress[] knownNodes;
+    private InetAddress[] indexToNode;
     private InetAddress selfAddress;
     private double[][] metrics;
 
@@ -39,21 +42,68 @@ public class OverlayRoutingModel {
             System.exit(1);
         }
 
+        listeners = new ArrayList<>();
+
         // Initially, we are the only known node
         nodeToIndex = new HashMap<InetAddress, Integer>();
-        knownNodes = new InetAddress[] { selfAddress };
+        indexToNode = new InetAddress[] { selfAddress };
         nodeToIndex.put(selfAddress, 0);
 
+        pendingUpdates = new LinkedList<TopologyUpdate>();
         nodesToAdd = new LinkedList<InetAddress>();
 
         metrics = new double[nodeToIndex.size()][nodeToIndex.size()];
 
-        // Fill metrics with non-existent links to start
+        // Fill metrics with default values to start
         for (int i = 0; i < metrics.length; i++) {
             for (int j = 0; j < metrics.length; j++) {
-                metrics[i][j] = -1.;
+                metrics[i][j] = DEFAULT_METRIC;
             }
         }
+    }
+
+    public synchronized void addListener(OverlayRoutingModelListener listener) {
+        listeners.add(listener);
+    }
+
+    public synchronized void notifyNodeListeners() {
+        for (OverlayRoutingModelListener listener : listeners) {
+            listener.nodeChangeCallback();
+        }
+    }
+
+    /**
+     * The lazy update method used for each link state packet
+     */
+    public synchronized void recordLinkStateInformation(TopologyUpdate update) {
+        Map<InetAddress, Double> newValues = update.metrics;
+        // Update known nodes let addNode take care of preventing duplicates
+        for (InetAddress addr : newValues.keySet()) {
+            if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
+                NetworkInterface.getInstance().connectAndAdd(addr);
+            }
+        }
+        // Add this update to the pending queue
+        pendingUpdates.add(update);
+    }
+
+    /**
+     * Trigger all of the batched link state updates to rebuild the model
+     */
+    public synchronized void triggerFullUpdate() {
+        // Rebuild the matrix
+        rebuildMatrix();
+
+        // Apply all of the new info from the link state packets
+        while (!pendingUpdates.isEmpty()) {
+            updateMetrics(pendingUpdates.remove());
+        }
+
+        // Build the tree
+        buildMst();
+
+        // Build the forwarding table
+        constructForwardingTable();
     }
 
     /**
@@ -63,134 +113,28 @@ public class OverlayRoutingModel {
     public synchronized void addNode(InetAddress addr) {
         if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
             nodesToAdd.add(addr);
+            notifyNodeListeners();
         }
-        // TODO tell the network interface to connect to this node (add to
-        // newSocketChannels)
-        // This will probably need to be synchronized.
     }
 
     /**
-     * Lazy delete a node. (Only call this if you are going to update right
-     * after)
+     * Delete a node and rebuild the model.
+     * 
+     * TODO -- Let's try the not lazy delete. It seems that if the
+     * NetworkInterface has lost a connection to a node, we need to rebuild
+     * immediately. If the lost node was adjacent to this node, the tree would
+     * then be disconnected and we shouldn't wait around for an update.
      */
-    public synchronized void removeNodeLazy(InetAddress addr) {
-        // lazy delete
+    public synchronized void deleteNode(InetAddress addr) {
         if (nodeToIndex.containsKey(addr)) {
-            knownNodes[nodeToIndex.get(addr)] = null;
+            indexToNode[nodeToIndex.get(addr)] = null;
             nodeToIndex.remove(addr);
         }
-    }
 
-    /**
-     * Update the model based on new information from the given src node
-     */
-    public synchronized void updateTopology(InetAddress src,
-            Map<InetAddress, Double> newValues) {
-        // Update known nodes
-        for (InetAddress addr : newValues.keySet()) {
-            if (!nodeToIndex.containsKey(addr)) {
-                addNode(addr);
-            }
-        }
+        // remove the node immediately from the tree
+        triggerFullUpdate();
 
-        // If we need to, add nodes or remove nodes
-        rebuildMatrix();
-
-        // Update the values in the table
-        updateMetrics(src, newValues);
-
-        // Rebuild the MST and the forwarding table
-        updateModel();
-    }
-
-    /**
-     * Call this when a low layer connection to a given dest is closed. This
-     * will mark the connection as non-existent in the metric table.
-     */
-    // TODO if our network will always be fully connected, we may just want to
-    // send out a remove node update if we cannot connect to a node...?
-    public void closeConnection(InetAddress destAddr) {
-        int src = nodeToIndex.get(selfAddress);
-        int dest = nodeToIndex.get(destAddr);
-
-        // Do it manually since we want to trust ourselves, not necessarily the
-        // node with the lower ip address
-        metrics[src][dest] = -1.;
-        metrics[dest][src] = -1.;
-    }
-
-    /**
-     * Update values in the table without creating a new table (all nodes must
-     * be in the matrix already)
-     */
-    public void updateMetrics(InetAddress src, Map<InetAddress, Double> values) {
-        int row = nodeToIndex.get(src);
-
-        // Update the metrics
-        for (int i = 0; i < metrics.length; i++) {
-            if (!values.containsKey(knownNodes[i]))
-                insertMetricTable(row, i, -1.);
-            else
-                insertMetricTable(row, i, values.get(knownNodes[i]));
-        }
-    }
-
-    /**
-     * If necessary, rebuild the matrix (i.e. do a batch update for the lazy
-     * adds and deletes).
-     */
-    public synchronized void rebuildMatrix() {
-        // If we don't need to rebuild it, then just return
-        if (nodesToAdd.isEmpty() && nodeToIndex.size() == knownNodes.length)
-            return;
-
-        // Figure out the new number of nodes
-        int newSize = 0;
-        for (int i = 0; i < knownNodes.length; i++)
-            newSize += (knownNodes[i] != null) ? 1 : 0;
-        newSize += nodesToAdd.size();
-
-        // Create the new metrics matrix
-        double[][] newMetrics = new double[newSize][newSize];
-
-        // Populate the new matrix with the pertinent old metrics
-        for (int i = 0; i < newSize; i++) {
-            for (int j = 0; j < newSize; j++) {
-                if (j >= knownNodes.length || i >= knownNodes.length
-                        || knownNodes[j] == null || knownNodes[i] == null) {
-                    newMetrics[i][j] = -1.;
-                } else {
-                    newMetrics[i][j] = metrics[i][j];
-                }
-            }
-        }
-
-        // Create the new known nodes array and map
-        InetAddress[] newKnownNodes = new InetAddress[newSize];
-        Map<InetAddress, Integer> newNodeToIndex = new HashMap<InetAddress, Integer>();
-
-        // Populate the new known nodes array and map
-        for (int i = 0; i < newSize; i++) {
-            if (i >= knownNodes.length || knownNodes[i] == null)
-                newKnownNodes[i] = nodesToAdd.remove();
-            else
-                newKnownNodes[i] = knownNodes[i];
-
-            newNodeToIndex.put(newKnownNodes[i], i);
-        }
-
-        metrics = newMetrics;
-        knownNodes = newKnownNodes;
-        nodeToIndex = newNodeToIndex;
-    }
-
-    /**
-     * Update the model (i.e. the tree and the forwarding table) based on the
-     * current graph (metric matrix).
-     */
-    public void updateModel() {
-        buildMst();
-        constructForwardingTable();
+        notifyNodeListeners();
     }
 
     /**
@@ -205,7 +149,7 @@ public class OverlayRoutingModel {
      * are pending.
      */
     public synchronized List<InetAddress> getKnownNodes() {
-        List<InetAddress> result = new ArrayList<>(Arrays.asList(knownNodes));
+        List<InetAddress> result = new ArrayList<>(Arrays.asList(indexToNode));
         result.addAll(nodesToAdd);
 
         return result;
@@ -217,7 +161,7 @@ public class OverlayRoutingModel {
     public synchronized List<InetAddress> getKnownNeighbors() {
         List<InetAddress> result = new ArrayList<>();
 
-        for (InetAddress addr : knownNodes) {
+        for (InetAddress addr : indexToNode) {
             if (addr != selfAddress) {
                 result.add(addr);
             }
@@ -229,6 +173,85 @@ public class OverlayRoutingModel {
 
     public synchronized InetAddress getSelfAddress() {
         return selfAddress;
+    }
+
+    /**
+     * Update values in the table without creating a new table (all nodes must
+     * be in the matrix already)
+     */
+    private void updateMetrics(TopologyUpdate update) {
+        InetAddress src = update.src;
+        Map<InetAddress, Double> values = update.metrics;
+
+        if (src == null) {
+            // TODO -- It is possible that a node sent a link state packet, that
+            // packet got queued, and then the node disconnected before we got
+            // to this point?
+            return;
+        }
+
+        int row = nodeToIndex.get(src);
+
+        // Update the metrics
+        for (int i = 0; i < metrics.length; i++) {
+            if (!values.containsKey(indexToNode[i]))
+                insertMetricTable(row, i, DEFAULT_METRIC);
+            else
+                insertMetricTable(row, i, values.get(indexToNode[i]));
+        }
+    }
+
+    /**
+     * If necessary, rebuild the matrix (i.e. do a batch update for the lazy
+     * adds and deletes).
+     */
+    private void rebuildMatrix() {
+        // If we don't need to rebuild it, then just return
+        if (nodesToAdd.isEmpty() && nodeToIndex.size() == indexToNode.length)
+            return;
+
+        // Figure out the new number of nodes
+        int newSize = 0;
+        for (int i = 0; i < indexToNode.length; i++)
+            newSize += (indexToNode[i] != null) ? 1 : 0;
+        newSize += nodesToAdd.size();
+
+        List<InetAddress> newIndexToNode = new ArrayList<>();
+        Map<InetAddress, Integer> newNodeToIndex = new HashMap<>();
+
+        for (InetAddress node : indexToNode) {
+            if (node != null) {
+                newIndexToNode.add(node);
+                newNodeToIndex.put(node, newIndexToNode.size() - 1);
+            }
+        }
+
+        // Create the new metrics matrix
+        double[][] newMetrics = new double[newSize][newSize];
+
+        // Populate the new matrix with the pertinent old metrics
+        for (int i = 0; i < newSize; i++) {
+            for (int j = 0; j < newSize; j++) {
+                if (j >= newIndexToNode.size() || i >= newIndexToNode.size()) {
+                    newMetrics[i][j] = DEFAULT_METRIC;
+                } else {
+                    newMetrics[i][j] = metrics[nodeToIndex.get(newIndexToNode
+                            .get(i))][nodeToIndex.get(newIndexToNode.get(j))];
+                }
+            }
+        }
+        
+        // Assign indexes to the new nodes
+        for (InetAddress node : nodesToAdd) {
+            newIndexToNode.add(node);
+            newNodeToIndex.put(node, newIndexToNode.size() - 1);
+        }
+        nodesToAdd.clear();
+
+        metrics = newMetrics;
+        indexToNode = new InetAddress[newIndexToNode.size()];
+        indexToNode = newIndexToNode.toArray(indexToNode);
+        nodeToIndex = newNodeToIndex;
     }
 
     /**
@@ -266,9 +289,9 @@ public class OverlayRoutingModel {
             int index = nodeToIndex.get(addr);
             for (int i = 0; i < metrics.length; i++) {
                 // If this is a valid edge to a new node, add it to the queue
-                if (!nodesInTree.containsKey(knownNodes[i])
+                if (!nodesInTree.containsKey(indexToNode[i])
                         && metrics[index][i] > 0)
-                    edges.add(new Edge(node, new TreeNode(knownNodes[i]),
+                    edges.add(new Edge(node, new TreeNode(indexToNode[i]),
                             metrics[index][i]));
             }
 
@@ -283,12 +306,12 @@ public class OverlayRoutingModel {
     private void constructForwardingTable() {
         fTable = new HashMap<InetAddress, InetAddress>();
 
-        for (int i = 0; i < knownNodes.length; i++) {
+        for (int i = 0; i < indexToNode.length; i++) {
             for (TreeNode nodeInterface : root.children) {
                 // If this interface has a path to reach the node, update the
                 // table
-                if (hasPathToNode(nodeInterface, knownNodes[i])) {
-                    fTable.put(knownNodes[i], nodeInterface.address);
+                if (hasPathToNode(nodeInterface, indexToNode[i])) {
+                    fTable.put(indexToNode[i], nodeInterface.address);
                     break;
                 }
             }
@@ -324,7 +347,7 @@ public class OverlayRoutingModel {
         // update, we need to update 2 entries (A->B and B->A). We pick which
         // value
         // to use, by trusting the node with the smaller ip address.
-        if (IPUtils.compareIPs(knownNodes[col], knownNodes[row]) < 0)
+        if (IPUtils.compareIPs(indexToNode[col], indexToNode[row]) < 0)
             value = metrics[col][row];
 
         metrics[row][col] = value;

@@ -1,5 +1,6 @@
 package com.github.aklatt1194.SuperAwesomeOverlay.network;
 
+import java.io.IOException;
 import java.net.SocketException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -24,21 +25,20 @@ public abstract class SimpleSocket {
         }
     }
 
-    public abstract void send(SimpleDatagramPacket packet);
+    public abstract void send(SimpleDatagramPacket packet) throws IOException;
 
     public SimpleDatagramPacket receive() {
         SimpleDatagramPacket packet;
         while (true) {
             try {
                 packet = readQueue.take();
-                break;
             } catch (InterruptedException e) {
                 continue;
             }
+            return packet;
         }
-        return packet;
     }
-    
+
     public SimpleDatagramPacket receive(long timeout) {
         SimpleDatagramPacket packet = null;
         long last = System.currentTimeMillis();
@@ -53,11 +53,15 @@ public abstract class SimpleSocket {
         }
         return packet;
     }
+    
+    public SimpleDatagramPacket interruptibleReceive(long timeout) throws InterruptedException {
+        return readQueue.poll(timeout, TimeUnit.MILLISECONDS);
+    }
 
     public void close() {
         NetworkInterface.getInstance().closeSocket(this);
     }
-    
+
     public int getPort() {
         return port;
     }
