@@ -36,6 +36,7 @@ SAO.metrics = {
 
       $('#latency-chart').highcharts('StockChart', {
         chart: {
+          height: 700,
           type: 'spline',
           zoomType: 'x'
         },
