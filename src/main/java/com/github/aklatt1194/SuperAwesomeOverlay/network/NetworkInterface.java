@@ -29,7 +29,7 @@ public class NetworkInterface implements Runnable {
     private static NetworkInterface instance = null;
 
     private OverlayRoutingModel model;
-    private Map<String, SocketChannel> tcpLinkTable;
+    private Map<InetAddress, SocketChannel> tcpLinkTable;
     private Map<Integer, SimpleSocket> portMap;
 
     private Selector selector;
@@ -126,8 +126,7 @@ public class NetworkInterface implements Runnable {
 
                 while (!nodesToRemove.isEmpty()) {
                     InetAddress addr = nodesToRemove.poll();
-                    SocketChannel socketChannel = tcpLinkTable.remove(addr
-                            .getHostAddress());
+                    SocketChannel socketChannel = tcpLinkTable.remove(addr);
 
                     if (socketChannel != null) {
                         // get rid of any buffers that this channel may have had
@@ -189,14 +188,14 @@ public class NetworkInterface implements Runnable {
 
         // if a node that we are already connected to is connecting to us, we
         // should remove the old socketchannel and use the new one
-        SocketChannel prevChannel = tcpLinkTable.get(addr.getHostAddress());
+        SocketChannel prevChannel = tcpLinkTable.get(addr);
         if (prevChannel != null) {
             prevChannel.keyFor(selector).cancel();
             prevChannel.close();
         }
 
         // add the new socketChannel to the table
-        tcpLinkTable.put(addr.getHostAddress(), socketChannel);
+        tcpLinkTable.put(addr, socketChannel);
 
         // add this newly connected node to model
         model.addNode(addr);
@@ -215,13 +214,13 @@ public class NetworkInterface implements Runnable {
             InetAddress addr = socketChannel.socket().getInetAddress();
             
             // Close up our old connection if we had one
-            SocketChannel prevChannel = tcpLinkTable.get(addr.getHostAddress());
+            SocketChannel prevChannel = tcpLinkTable.get(addr);
             if (prevChannel != null) {
                 prevChannel.keyFor(selector).cancel();
                 prevChannel.close();
             }
             
-            tcpLinkTable.put(addr.getHostAddress(), socketChannel);
+            tcpLinkTable.put(addr, socketChannel);
             socketChannel.register(selector, SelectionKey.OP_READ);
             model.addNode(addr);
         } catch (IOException e) {
@@ -261,7 +260,7 @@ public class NetworkInterface implements Runnable {
                 System.out.println("\n\n\nWhy are we deleting ourselves: read\n\n\n");
             }
             model.deleteNode(addr);
-            tcpLinkTable.remove(addr.getHostAddress());*/
+            tcpLinkTable.remove(addr);*/
 
             return;
         }
@@ -348,8 +347,7 @@ public class NetworkInterface implements Runnable {
         // place a pending request on the queue for this socketchannel to be
         // changed to write
 
-        SocketChannel socket = tcpLinkTable.get(packet.getDestination()
-                .getHostAddress());
+        SocketChannel socket = tcpLinkTable.get(packet.getDestination());
 
         if (socket == null) {
             // we aren't actually connected to the destination
@@ -426,7 +424,7 @@ public class NetworkInterface implements Runnable {
      * @param addr The node to attempt to disconnect from and remove
      */
     public void disconnectFromNode(InetAddress addr) {
-        if (tcpLinkTable.containsKey(addr.getHostAddress())) {
+        if (tcpLinkTable.containsKey(addr)) {
             // let's check that it is actually in the table before we bother
             // waking the selector up
             nodesToRemove.add(addr);
