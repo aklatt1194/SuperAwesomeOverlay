@@ -37,7 +37,7 @@ public class NetworkInterface implements Runnable {
     private BlockingQueue<ServerDataEvent> readPackets;
     private BlockingQueue<ChangeRequest> pendingRequests;
     private Map<InetAddress, BlockingQueue<ByteBuffer>> pendingWrites;
-    private Map<SocketChannel, ByteBuffer> pendingReads;
+    private Map<InetAddress, ByteBuffer> pendingReads;
 
     private BlockingQueue<InetAddress> potentialNodes;
     private BlockingQueue<InetAddress> nodesToRemove;
@@ -127,7 +127,7 @@ public class NetworkInterface implements Runnable {
 
                     if (socketChannel != null) {
                         // get rid of any buffers that this channel may have had
-                        pendingReads.remove(socketChannel);
+                        pendingReads.remove(socketChannel.socket().getInetAddress());
                         pendingWrites.remove(addr);
 
                         socketChannel.keyFor(selector).cancel();
@@ -237,7 +237,7 @@ public class NetworkInterface implements Runnable {
 
         if (numRead == -1) {
             // Remote closed socket cleanly
-            pendingReads.remove(socketChannel);
+            pendingReads.remove(socketChannel.socket().getInetAddress());
             pendingWrites.remove(socketChannel.socket().getInetAddress());
             try {
                 socketChannel.close();
@@ -246,36 +246,25 @@ public class NetworkInterface implements Runnable {
             key.cancel();
 
             /*
-             * TODO I temporarily removed this. I think it may be causing
-             * problems, and I am not sure when we need it.
-             * 
-             * We still remove cancel the key in the line preceding this
-             * comment. By commenting out the code below, we keep a reference to
-             * the socket channel in our table. Later on, if we try to get the
-             * key for that socketchannel and do something with it, we'll have
-             * an exception.
+             * TODO I think I am finally convinced that this is not part of the problem :P!
              */
 
-            /* TODO here we go again... not sure why I dislike these 3 lines of
-             * code so much :P.
-             
             // Debug stuff
             System.out.println("\n\n\nProblem in read!\n\n");
             
             InetAddress addr = socketChannel.socket().getInetAddress();
             model.deleteNode(addr);
             tcpLinkTable.remove(addr);
-            */
 
             return;
         }
 
         readBuffer.flip();
-        ByteBuffer pendingBytes = pendingReads.get(socketChannel);
+        ByteBuffer pendingBytes = pendingReads.get(socketChannel.socket().getInetAddress());
         ByteBuffer totalBytes;
 
         if (pendingBytes != null) {
-            pendingReads.put(socketChannel, null);
+            pendingReads.put(socketChannel.socket().getInetAddress(), null);
             totalBytes = ByteBuffer.allocate(pendingBytes.remaining() + readBuffer.remaining());
             totalBytes.put(pendingBytes);
             totalBytes.put(readBuffer);
@@ -299,7 +288,7 @@ public class NetworkInterface implements Runnable {
                     // the next time this method is called
                     ByteBuffer remaining = ByteBuffer.allocate(totalBytes.remaining());
                     remaining.put(totalBytes);
-                    pendingReads.put(socketChannel, remaining);
+                    pendingReads.put(socketChannel.socket().getInetAddress(), remaining);
                 }
                 break;
             }
