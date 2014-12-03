@@ -91,13 +91,8 @@ public class OverlayRoutingManager implements Runnable,
                     // Send out our own ls update
                     sendLinkStateUpdate(model.getKnownNeighbors());
 
-                    // We are expecting to hear from everyone that the src of
-                    // this update knows about
-                    expected = new HashSet<InetAddress>();
-                    for (InetAddress addr : initUpd.metrics.keySet()) {
-                        if (!addr.equals(initUpd.src))
-                            expected.add(addr);
-                    }
+                    // We are expecting to hear from all of our neighbors
+                    expected = new HashSet<InetAddress>(model.getKnownNeighbors());
                 }
             }
 
@@ -172,6 +167,16 @@ public class OverlayRoutingManager implements Runnable,
             Map<Long, Double> throughputs = db.getThroughputData(node, time
                     - METRIC_AVERAGE_PERIOD, time);
 
+            // If we don't have any recent data, get the most recent data that we do have
+            if (latencies.isEmpty()) {
+                long lastTime = db.getLastLatencyRecordTime(node);
+                latencies = db.getLatencyData(node, lastTime - METRIC_AVERAGE_PERIOD, lastTime + 1);
+            }
+            if (throughputs.isEmpty()) {
+                long lastTime = db.getLastThroughputRecordTime(node);
+                throughputs = db.getThroughputData(node, lastTime - METRIC_AVERAGE_PERIOD, lastTime + 1);
+            }
+            
             double avgLat = getAvg(latencies);
             double avgThrough = getAvg(throughputs);
 
@@ -190,6 +195,7 @@ public class OverlayRoutingManager implements Runnable,
     }
 
     private double getAvg(Map<Long, Double> stats) {
+        // If we have no data, return a default
         if (stats.isEmpty())
             return OverlayRoutingModel.DEFAULT_METRIC;
 

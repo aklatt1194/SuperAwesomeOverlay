@@ -208,6 +208,14 @@ public class NetworkInterface implements Runnable {
             socketChannel.finishConnect();
 
             InetAddress addr = socketChannel.socket().getInetAddress();
+            
+            // Close up our old connection if we had one
+            SocketChannel prevChannel = tcpLinkTable.get(addr);
+            if (prevChannel != null) {
+                prevChannel.keyFor(selector).cancel();
+                prevChannel.close();
+            }
+            
             tcpLinkTable.put(addr.getHostAddress(), socketChannel);
             socketChannel.register(selector, SelectionKey.OP_READ);
             model.addNode(addr);
@@ -389,8 +397,14 @@ public class NetworkInterface implements Runnable {
      * @param addr The node to attempt to connect to and add
      */
     public void connectAndAdd(InetAddress addr) {
-        potentialNodes.add(addr);
-        selector.wakeup();
+        // The test and add are not necessarily atomic, but I think it should
+        // be fine since we are the only thread adding to the queue. (We may still
+        // get duplicate connection attempts, but the connect method should take
+        // care of this.
+        if (!potentialNodes.contains(addr)) {
+            potentialNodes.add(addr);
+            selector.wakeup();
+        }
     }
 
     /**

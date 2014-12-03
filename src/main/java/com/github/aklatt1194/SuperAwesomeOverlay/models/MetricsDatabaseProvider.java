@@ -236,4 +236,30 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
         stmt.executeUpdate(createIndex);
 
     }
+
+    @Override
+    public long getLastLatencyRecordTime(String node) {
+        return getLastRecordTime(node, LATENCY_TABLE);
+    }
+
+    @Override
+    public long getLastThroughputRecordTime(String node) {
+        return getLastRecordTime(node, THROUGHPUT_TABLE);
+    }
+    
+    private long getLastRecordTime(String node, String table) {
+        String query = "SELECT TOP(1) Time FROM " + table + " ORDER BY Time DESC";
+        long result = -1;
+        
+        try {
+            Statement stmt = c.createStatement();
+            ResultSet rs = stmt.executeQuery(query);
+            
+            if (rs.next())
+                result = rs.getLong("Time");
+        } catch (SQLException e) {
+            System.err.println("Error retreiving last metric update time");
+        }
+        return result;
+    }
 }

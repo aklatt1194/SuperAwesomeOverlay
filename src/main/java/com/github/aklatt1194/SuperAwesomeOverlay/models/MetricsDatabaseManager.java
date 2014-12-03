@@ -66,4 +66,16 @@ public interface MetricsDatabaseManager {
      */
     public Map<Long, Double> getThroughputData(String node, long startTime,
             long endTime);
+    
+    /**
+     * Get the time of the last latency ping saved in the db
+     * (returns -1 on error or if no data exists)
+     */
+    public long getLastLatencyRecordTime(String node);
+    
+    /**
+     * Get the time of the last throughput metric saved in the db 
+     * (returns -1 on error or if no data exists)
+     */
+    public long getLastThroughputRecordTime(String node);
 }
