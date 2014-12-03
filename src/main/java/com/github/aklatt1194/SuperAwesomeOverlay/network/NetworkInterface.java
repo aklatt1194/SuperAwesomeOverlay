@@ -184,7 +184,7 @@ public class NetworkInterface implements Runnable {
 
         // if a node that we are already connected to is connecting to us, we
         // should remove the old socketchannel and use the new one
-        SocketChannel prevChannel = tcpLinkTable.get(addr);
+        SocketChannel prevChannel = tcpLinkTable.get(addr.getHostAddress());
         if (prevChannel != null) {
             prevChannel.keyFor(selector).cancel();
             prevChannel.close();
@@ -210,7 +210,7 @@ public class NetworkInterface implements Runnable {
             InetAddress addr = socketChannel.socket().getInetAddress();
             
             // Close up our old connection if we had one
-            SocketChannel prevChannel = tcpLinkTable.get(addr);
+            SocketChannel prevChannel = tcpLinkTable.get(addr.getHostAddress());
             if (prevChannel != null) {
                 prevChannel.keyFor(selector).cancel();
                 prevChannel.close();
@@ -249,7 +249,7 @@ public class NetworkInterface implements Runnable {
 
             InetAddress addr = socketChannel.socket().getInetAddress();
             model.deleteNode(addr);
-            tcpLinkTable.remove(addr);
+            tcpLinkTable.remove(addr.getHostAddress());
 
             return;
         }
@@ -414,7 +414,7 @@ public class NetworkInterface implements Runnable {
      * @param addr The node to attempt to disconnect from and remove
      */
     public void disconnectFromNode(InetAddress addr) {
-        if (tcpLinkTable.containsKey(addr)) {
+        if (tcpLinkTable.containsKey(addr.getHostAddress())) {
             // let's check that it is actually in the table before we bother
             // waking the selector up
             nodesToRemove.add(addr);
