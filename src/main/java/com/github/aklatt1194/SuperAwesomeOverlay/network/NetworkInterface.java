@@ -256,12 +256,16 @@ public class NetworkInterface implements Runnable {
              * an exception.
              */
 
+            /* TODO here we go again... not sure why I dislike these 3 lines of
+             * code so much :P.
+             
             // Debug stuff
             System.out.println("\n\n\nProblem in read!\n\n");
             
             InetAddress addr = socketChannel.socket().getInetAddress();
             model.deleteNode(addr);
             tcpLinkTable.remove(addr);
+            */
 
             return;
         }
