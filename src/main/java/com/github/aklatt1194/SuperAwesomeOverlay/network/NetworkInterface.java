@@ -97,7 +97,7 @@ public class NetworkInterface implements Runnable {
                 if (!pendingRequests.isEmpty()) {
                     ChangeRequest request = pendingRequests.take();
                     SelectionKey key = request.socket.keyFor(selector);
-                    if (key != null) {
+                    if (key != null && key.isValid()) {
                         key.interestOps(request.ops);
                     }
                 }
