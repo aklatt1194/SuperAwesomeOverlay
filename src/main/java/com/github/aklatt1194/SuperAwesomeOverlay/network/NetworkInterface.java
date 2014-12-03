@@ -137,7 +137,7 @@ public class NetworkInterface implements Runnable {
                         }
 
                         /** Debug stuff **/
-                        System.out.println("/n/n/nProblem in run!/n/n");
+                        System.out.println("\n\n\nProblem in run!\n\n");
                         
                         model.deleteNode(addr);
                     }

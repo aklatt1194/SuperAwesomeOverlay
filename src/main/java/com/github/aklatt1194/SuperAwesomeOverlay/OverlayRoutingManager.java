@@ -108,6 +108,8 @@ public class OverlayRoutingManager implements Runnable,
                 if (packet == null) {
                     // Disconnect from the remaining nodes
                     for (InetAddress node : expected) {
+                        // Debug stuff
+                        System.out.println("\n\n\nProblem in manager!\n\n");
                         NetworkInterface.getInstance().disconnectFromNode(node);
                     }
 
