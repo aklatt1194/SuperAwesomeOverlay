@@ -162,7 +162,7 @@ public class OverlayRoutingModel {
         List<InetAddress> result = new ArrayList<>();
 
         for (InetAddress addr : indexToNode) {
-            if (addr != selfAddress) {
+            if (!addr.equals(selfAddress)) {
                 result.add(addr);
             }
         }
