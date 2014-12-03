@@ -23,7 +23,7 @@ public class OverlayRoutingManager implements Runnable,
     public static final int PORT = 55555;
     public static final long LINK_STATE_PERIOD = 1000 * 60; // 60 sec
     public static final long METRIC_AVERAGE_PERIOD = 60 * 1000 * 5; // 5 min
-    public static final long LS_TIMEOUT = 5 * 1000;
+    public static final long LS_TIMEOUT = 2 * 1000;
     public static final long BOOTUP_TIME = 2 * 1000;
 
     private volatile boolean forceLinkState;
@@ -64,11 +64,12 @@ public class OverlayRoutingManager implements Runnable,
         while (true) {
             // Should we be initiating a link state update
             if (forceLinkState || (System.currentTimeMillis() - lastLinkState) > LINK_STATE_PERIOD) {
-                sendLinkStateUpdate(model.getKnownNeighbors());
+                List<InetAddress> recipients = model.getKnownNeighbors();
+                sendLinkStateUpdate(recipients);
                 forceLinkState = false;
                 
                 // Nodes we are expecting to receive ls updates from
-                expected = new HashSet<InetAddress>(model.getKnownNeighbors());
+                expected = new HashSet<InetAddress>(recipients);
             } else {
                 // If we received a link state packet, initiate an update
                 SimpleDatagramPacket initPacket;
@@ -89,19 +90,12 @@ public class OverlayRoutingManager implements Runnable,
                     model.recordLinkStateInformation(initUpd);
 
                     // Send out our own ls update
-                    sendLinkStateUpdate(model.getKnownNeighbors());
-                    
-                    // Just a test
-                    expected = new HashSet<InetAddress>();
-                    for (InetAddress node : initUpd.metrics.keySet()) {
-                        if (!node.equals(initUpd.src))
-                            expected.add(node);
-                    }
-                    /*
+                    List<InetAddress> recipients = model.getKnownNeighbors();
+                    sendLinkStateUpdate(recipients);
+
                     // We are expecting to hear from all of our neighbors except for the first one
-                    expected = new HashSet<InetAddress>(model.getKnownNeighbors());
+                    expected = new HashSet<InetAddress>(recipients);
                     expected.remove(initPacket.getSource());
-                    */
                 }
             }
 
