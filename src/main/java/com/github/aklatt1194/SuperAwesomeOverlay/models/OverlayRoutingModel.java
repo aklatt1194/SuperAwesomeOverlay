@@ -188,10 +188,11 @@ public class OverlayRoutingModel {
         InetAddress src = update.src;
         Map<InetAddress, Double> values = update.metrics;
 
-        if (src == null) {
-            // TODO -- It is possible that a node sent a link state packet, that
-            // packet got queued, and then the node disconnected before we got
-            // to this point?
+        // TODO If the node sends out a ls update and then gracefully disconnects
+        // from us (not sure how that would happen given that the only graceful
+        // disconnects that we have are handling duplicate connections) we
+        // might receive this useless ls packet.
+        if (nodeToIndex.get(src) == null) {
             return;
         }
 

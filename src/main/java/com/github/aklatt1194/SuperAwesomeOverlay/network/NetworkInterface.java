@@ -242,6 +242,7 @@ public class NetworkInterface implements Runnable {
             return;
         }
 
+        
         if (numRead == -1) {
             // Remote closed socket cleanly
             pendingReads.remove(socketChannel);
@@ -252,13 +253,15 @@ public class NetworkInterface implements Runnable {
             }
             key.cancel();
 
+            /* TODO I temporarily removed this. I think it may be causing problems, and I am
+             * not sure when we need it.
             InetAddress addr = socketChannel.socket().getInetAddress();
-            /** Debug stuff**/
+            // Debug stuff
             if (addr.equals(model.getSelfAddress())) {
                 System.out.println("\n\n\nWhy are we deleting ourselves: read\n\n\n");
             }
             model.deleteNode(addr);
-            tcpLinkTable.remove(addr.getHostAddress());
+            tcpLinkTable.remove(addr.getHostAddress());*/
 
             return;
         }
