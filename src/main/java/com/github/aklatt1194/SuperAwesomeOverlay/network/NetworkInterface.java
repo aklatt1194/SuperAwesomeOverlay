@@ -137,9 +137,8 @@ public class NetworkInterface implements Runnable {
                         }
 
                         /** Debug stuff **/
-                        if (addr.equals(model.getSelfAddress())) {
-                            System.out.println("\n\n\nWhy are we deleting ourselves: run\n\n\n");
-                        }
+                        System.out.println("/n/n/nProblem in run!/n/n");
+                        
                         model.deleteNode(addr);
                     }
                 }
@@ -257,13 +256,8 @@ public class NetworkInterface implements Runnable {
              * an exception.
              */
 
-            /*
-             * We shouldn't connect to ourselves in the first place.
-             * 
-             * // Debug stuff if (addr.equals(model.getSelfAddress())) {
-             * System.out
-             * .println("\n\n\nWhy are we deleting ourselves: read\n\n\n"); }
-             */
+            // Debug stuff
+            System.out.println("\n\n\nProblem in read!\n\n");
             
             InetAddress addr = socketChannel.socket().getInetAddress();
             model.deleteNode(addr);
