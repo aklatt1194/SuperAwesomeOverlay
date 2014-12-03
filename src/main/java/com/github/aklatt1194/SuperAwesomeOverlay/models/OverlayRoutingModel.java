@@ -285,6 +285,16 @@ public class OverlayRoutingModel {
             // Add the node to the set
             nodesInTree.put(addr, node);
 
+            /** Debug stuff **/
+            if (nodeToIndex.get(addr) == null) {
+                System.out.println("\n\n\n" + addr.toString());
+                
+                for (int i = 0; i < indexToNode.length; i++)
+                    System.out.println("i: " + indexToNode[i].toString());
+                
+                System.out.println("\n\n");
+            }
+            
             // Add all of this new node's edges to the queue
             int index = nodeToIndex.get(addr);
             for (int i = 0; i < metrics.length; i++) {
