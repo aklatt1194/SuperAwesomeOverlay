@@ -90,10 +90,18 @@ public class OverlayRoutingManager implements Runnable,
 
                     // Send out our own ls update
                     sendLinkStateUpdate(model.getKnownNeighbors());
-
+                    
+                    // Just a test
+                    expected = new HashSet<InetAddress>();
+                    for (InetAddress node : initUpd.metrics.keySet()) {
+                        if (!node.equals(initUpd.src))
+                            expected.add(node);
+                    }
+                    /*
                     // We are expecting to hear from all of our neighbors except for the first one
                     expected = new HashSet<InetAddress>(model.getKnownNeighbors());
                     expected.remove(initPacket.getSource());
+                    */
                 }
             }
 
