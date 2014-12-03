@@ -84,7 +84,7 @@ public class NetworkInterface implements Runnable {
         thread = new Thread(new PacketRouter());
         thread.start();
 
-        // try to connect to any of the bootstrap nodes (hopefull at least one)
+        // try to connect to any of the bootstrap nodes (hopefully at least one)
         for (String node : NODES_BOOTSTRAP) {
             connectAndAdd(InetAddress.getByName(node));
         }
@@ -409,8 +409,8 @@ public class NetworkInterface implements Runnable {
         // The test and add are not necessarily atomic, but I think it should
         // be fine since we are the only thread adding to the queue. (We may still
         // get duplicate connection attempts, but the connect method should take
-        // care of this.
-        if (!potentialNodes.contains(addr)) {
+        // care of this. Also, lets not connect to ourself :/.
+        if (!potentialNodes.contains(addr) && !addr.equals(model.getSelfAddress())) {
             potentialNodes.add(addr);
             selector.wakeup();
         }
