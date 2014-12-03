@@ -139,6 +139,11 @@ public class NetworkInterface implements Runnable {
                             socketChannel.close();
                         } catch (IOException e) {
                         }
+                        
+                        /** Debug stuff**/
+                        if (addr.equals(model.getSelfAddress())) {
+                            System.out.println("\n\n\nWhy are we deleting ourselves: run\n\n\n");
+                        }
                         model.deleteNode(addr);
                     }
                 }
@@ -248,6 +253,10 @@ public class NetworkInterface implements Runnable {
             key.cancel();
 
             InetAddress addr = socketChannel.socket().getInetAddress();
+            /** Debug stuff**/
+            if (addr.equals(model.getSelfAddress())) {
+                System.out.println("\n\n\nWhy are we deleting ourselves: read\n\n\n");
+            }
             model.deleteNode(addr);
             tcpLinkTable.remove(addr.getHostAddress());
 

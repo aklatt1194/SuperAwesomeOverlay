@@ -126,6 +126,11 @@ public class OverlayRoutingModel {
      * then be disconnected and we shouldn't wait around for an update.
      */
     public synchronized void deleteNode(InetAddress addr) {
+        /** Debug stuff**/
+        if (addr.equals(selfAddress)) {
+            System.out.println("\n\n\nWhy are we deleting ourselves: deleteNode\n\n\n");
+        }
+        
         if (nodeToIndex.containsKey(addr)) {
             indexToNode[nodeToIndex.get(addr)] = null;
             nodeToIndex.remove(addr);
