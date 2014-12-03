@@ -86,15 +86,14 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
      * @param startTime
      * @param endTime
      * @param table
-     * @throws IllegalArgumentException If startTime or endTime is invalid
      * @return
      */
     private Map<Long, Double> getConnectionData(String node, long startTime,
             long endTime, String table) {
-        if (startTime < 0 || startTime > endTime)
-            throw new IllegalArgumentException();
-
         Map<Long, Double> result = new TreeMap<>();
+        
+        if (startTime < 0 || startTime > endTime)
+            return result;
 
         String select = String
                 .format("SELECT Time, %s FROM %s WHERE Node='%s' AND Time>=%d AND Time<%d",
@@ -136,10 +135,10 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
      */
     private Map<Long, Double> getConnectionData(String node, long startTime,
             long endTime, long bucketSize, String table) {
-        if (startTime < 0 || startTime > endTime)
-            throw new IllegalArgumentException();
-
         Map<Long, Double> result = new TreeMap<>();
+        
+        if (startTime < 0 || startTime > endTime)
+            return result;
 
         String select = String
                 .format("SELECT ((min(Time) + %d) / %d) * %d as Time, Node, avg(%s) as %s "
