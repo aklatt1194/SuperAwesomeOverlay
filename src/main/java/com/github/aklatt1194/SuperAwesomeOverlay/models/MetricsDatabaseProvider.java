@@ -247,7 +247,7 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
     }
     
     private long getLastRecordTime(String node, String table) {
-        String query = "SELECT TOP(1) Time FROM " + table + " ORDER BY Time DESC";
+        String query = "SELECT Time FROM " + table + " ORDER BY Time DESC LIMIT 1";
         long result = -1;
         
         try {
