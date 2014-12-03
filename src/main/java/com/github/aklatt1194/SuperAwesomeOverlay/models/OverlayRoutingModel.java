@@ -287,10 +287,11 @@ public class OverlayRoutingModel {
 
             /** Debug stuff **/
             if (nodeToIndex.get(addr) == null) {
-                System.out.println("\n\n\n" + addr.toString());
-                
+                System.out.println("\n\n\nI am node: " + selfAddress.toString());
+                System.out.println("I failed on this address:" + addr.toString());
+                System.out.println("I know about these nodes");
                 for (int i = 0; i < indexToNode.length; i++)
-                    System.out.println("i: " + indexToNode[i].toString());
+                    System.out.println(i + ": " + indexToNode[i].toString());
                 
                 System.out.println("\n\n");
             }
