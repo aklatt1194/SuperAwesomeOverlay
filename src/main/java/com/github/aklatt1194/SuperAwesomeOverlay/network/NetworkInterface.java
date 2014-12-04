@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
+import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class NetworkInterface implements Runnable {
     public static final String[] NODES_BOOTSTRAP = { "ec2-54-149-47-168.us-west-2.compute.amazonaws.com" };
@@ -344,14 +345,12 @@ public class NetworkInterface implements Runnable {
      * @param addr The node to attempt to connect to and add
      */
     public void connectAndAdd(InetAddress addr) {
-        // The test and add are not necessarily atomic, but I think it should
-        // be fine since we are the only thread adding to the queue. (We may
-        // still
-        // get duplicate connection attempts, but the connect method should take
-        // care of this. Also, lets not connect to ourself :/.
         if (!potentialNodes.contains(addr) && !addr.equals(model.getSelfAddress())) {
-            potentialNodes.add(addr);
-            selector.wakeup();
+            // lets try to connect if we have a lower address
+            if (IPUtils.compareIPs(addr, model.getSelfAddress()) < 0) {
+                potentialNodes.add(addr);
+                selector.wakeup();
+            }
         }
     }
 
