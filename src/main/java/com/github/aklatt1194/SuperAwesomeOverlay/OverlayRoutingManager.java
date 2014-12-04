@@ -69,6 +69,7 @@ public class OverlayRoutingManager implements Runnable,
                 expected = new HashSet<InetAddress>(model.getKnownNeighbors()); 
                 
                 // DEBUG
+                System.out.println(System.currentTimeMillis() + ": Start of new ls update");
                 System.out.print(System.currentTimeMillis() + ": Sending ls packets to:");
                 for (InetAddress addr: expected)
                     System.out.print(" " + addr);
@@ -94,6 +95,10 @@ public class OverlayRoutingManager implements Runnable,
                     TopologyUpdate initUpd = TopologyUpdate
                             .deserialize(initPacket.getPayload());
                     model.recordLinkStateInformation(initUpd);
+                    
+                    // DEBUG
+                    System.out.println(System.currentTimeMillis() + ": Start of new ls update");
+                    System.out.println(System.currentTimeMillis() + ": Recieved ls from " + initUpd.src);
                     
                     // We are expecting to hear from all of our neighbors
                     expected = new HashSet<InetAddress>(model.getKnownNeighbors());
