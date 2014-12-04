@@ -80,7 +80,7 @@ public class OverlayRoutingModel {
         // Update known nodes let addNode take care of preventing duplicates
         for (InetAddress addr : newValues.keySet()) {
             if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
-                NetworkInterface.getInstance().connectAndAdd(addr);
+                NetworkInterface.getInstance().connectAndAdd(addr, false);
             }
         }
         // Add this update to the pending queue

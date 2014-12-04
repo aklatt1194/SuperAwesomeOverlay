@@ -76,7 +76,7 @@ public class NetworkInterface implements Runnable {
 
         // try to connect to any of the bootstrap nodes (hopefully at least one)
         for (String node : NODES_BOOTSTRAP) {
-            connectAndAdd(InetAddress.getByName(node));
+            connectAndAdd(InetAddress.getByName(node), true);
         }
     }
 
@@ -344,10 +344,10 @@ public class NetworkInterface implements Runnable {
      * 
      * @param addr The node to attempt to connect to and add
      */
-    public void connectAndAdd(InetAddress addr) {
+    public void connectAndAdd(InetAddress addr, boolean bootstrap) {
         if (!potentialNodes.contains(addr) && !addr.equals(model.getSelfAddress())) {
             // lets try to connect if we have a lower address
-            if (IPUtils.compareIPs(addr, model.getSelfAddress()) < 0) {
+            if (bootstrap || IPUtils.compareIPs(addr, model.getSelfAddress()) < 0) {
                 potentialNodes.add(addr);
                 selector.wakeup();
             }
