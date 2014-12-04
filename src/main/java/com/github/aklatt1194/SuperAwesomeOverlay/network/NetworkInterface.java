@@ -239,6 +239,7 @@ public class NetworkInterface implements Runnable {
         }
 
         // stick the packet on the read queue of the appropriate socket
+        readBuffer.flip();
         SimpleDatagramPacket packet = SimpleDatagramPacket.createFromBuffer(readBuffer,
                 socketChannel.socket().getInetAddress(), model.getSelfAddress());
 

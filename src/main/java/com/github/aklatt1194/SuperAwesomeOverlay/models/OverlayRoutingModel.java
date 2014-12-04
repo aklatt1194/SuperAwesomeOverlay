@@ -126,11 +126,6 @@ public class OverlayRoutingModel {
      * then be disconnected and we shouldn't wait around for an update.
      */
     public synchronized void deleteNode(InetAddress addr) {
-        /** Debug stuff**/
-        if (addr.equals(selfAddress)) {
-            System.out.println("\n\n\nWhy are we deleting ourselves: deleteNode\n\n\n");
-        }
-        
         if (nodeToIndex.containsKey(addr)) {
             indexToNode[nodeToIndex.get(addr)] = null;
             nodeToIndex.remove(addr);
@@ -188,11 +183,10 @@ public class OverlayRoutingModel {
         InetAddress src = update.src;
         Map<InetAddress, Double> values = update.metrics;
 
-        // TODO If the node sends out a ls update and then gracefully disconnects
-        // from us (not sure how that would happen given that the only graceful
-        // disconnects that we have are handling duplicate connections) we
-        // might receive this useless ls packet.
-        if (nodeToIndex.get(src) == null) {
+        if (src == null) {
+            // TODO -- It is possible that a node sent a link state packet, that
+            // packet got queued, and then the node disconnected before we got
+            // to this point?
             return;
         }
 
