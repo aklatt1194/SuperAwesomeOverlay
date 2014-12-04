@@ -403,8 +403,6 @@ public class NetworkInterface implements Runnable {
      * @param addr The node to attempt to disconnect from and remove
      */
     public void disconnectFromNode(InetAddress addr) {
-        // DEBUG
-        System.out.println("\n\n\nWe probably shouldn't be disconnecting from a node!\n\n");
         
         if (tcpLinkTable.containsKey(addr)) {
             // let's check that it is actually in the table before we bother

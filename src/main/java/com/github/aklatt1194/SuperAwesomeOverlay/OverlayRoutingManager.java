@@ -67,6 +67,13 @@ public class OverlayRoutingManager implements Runnable,
             if (forceLinkState || (System.currentTimeMillis() - lastLinkState) > LINK_STATE_PERIOD) {
              // Nodes we are expecting to receive ls updates from
                 expected = new HashSet<InetAddress>(model.getKnownNeighbors()); 
+                
+                // DEBUG
+                System.out.print(System.currentTimeMillis() + ": Sending ls packets to:");
+                for (InetAddress addr: expected)
+                    System.out.print(" " + addr);
+                System.out.println();
+                
                 sendLinkStateUpdate(new ArrayList<InetAddress>(expected));
                 forceLinkState = false;
             } else {
@@ -90,6 +97,12 @@ public class OverlayRoutingManager implements Runnable,
                     
                     // We are expecting to hear from all of our neighbors
                     expected = new HashSet<InetAddress>(model.getKnownNeighbors());
+                    
+                    // DEBUG
+                    System.out.print(System.currentTimeMillis() + ": Sending ls packets to:");
+                    for (InetAddress addr: expected)
+                        System.out.print(" " + addr);
+                    System.out.println();
                     
                     // Send out our own ls update
                     sendLinkStateUpdate(new ArrayList<InetAddress>(expected));
@@ -115,8 +128,8 @@ public class OverlayRoutingManager implements Runnable,
                     model.recordLinkStateInformation(upd);
                     
                     // DEBUG
-                    if (!expected.contains(upd.src))
-                        System.out.println("\n\n\nWe received 2 ls packets from the same src in 1 update\n\n");
+                    System.out.println(System.currentTimeMillis() + ": Recieved ls from " + upd.src);
+                   
                     
                     expected.remove(upd.src);
                 }
