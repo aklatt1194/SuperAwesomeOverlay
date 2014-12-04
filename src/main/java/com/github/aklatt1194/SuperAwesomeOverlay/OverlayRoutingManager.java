@@ -113,6 +113,11 @@ public class OverlayRoutingManager implements Runnable,
                     TopologyUpdate upd = TopologyUpdate.deserialize(packet
                             .getPayload());
                     model.recordLinkStateInformation(upd);
+                    
+                    // DEBUG
+                    if (expected.contains(upd.src))
+                        System.out.println("\n\n\nWe received 2 ls packets from the same src in 1 update\n\n");
+                    
                     expected.remove(upd.src);
                 }
             }
