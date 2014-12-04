@@ -24,7 +24,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
     public static final int PORT = 55555;
     public static final long LINK_STATE_PERIOD = 1000 * 60; // 60 sec
     public static final long METRIC_AVERAGE_PERIOD = 60 * 1000 * 5; // 5 min
-    public static final long LS_TIMEOUT = 2 * 1000;
+    public static final long LS_TIMEOUT = 4 * 1000;
     public static final long BOOTUP_TIME = 2 * 1000;
 
     private BaseLayerSocket socket;
