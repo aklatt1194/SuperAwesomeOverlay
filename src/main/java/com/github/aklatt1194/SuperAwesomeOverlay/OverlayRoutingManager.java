@@ -111,6 +111,8 @@ public class OverlayRoutingManager implements Runnable,
                     
                     // Send out our own ls update
                     sendLinkStateUpdate(new ArrayList<InetAddress>(expected));
+                    
+                    expected.remove(initUpd.src);
                 }
             }
 
