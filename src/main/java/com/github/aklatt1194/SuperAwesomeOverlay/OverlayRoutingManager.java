@@ -33,6 +33,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
     private Set<InetAddress> expected;
 
     private volatile long end;
+    private volatile boolean inUpdate;
 
     private Thread managerThread;
 
@@ -43,6 +44,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
         this.socket.bind(PORT);
 
         expected = Collections.synchronizedSet(new HashSet<InetAddress>());
+        inUpdate = false;
 
         model.addListener(this);
 
@@ -64,12 +66,17 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
         while (true) {
             TopologyUpdate upd = null;
             SimpleDatagramPacket packet = null;
+            List<InetAddress> neighbors = null;
             expected.clear();
             
             // wait until we receive a LS packet
             packet = socket.receive(LINK_STATE_PERIOD);
-
-            List<InetAddress> neighbors = model.getKnownNeighbors();
+            
+            synchronized (this) {
+                inUpdate = true; // flag that we are in an update
+                neighbors = model.getKnownNeighbors();
+            }
+            
             expected.addAll(neighbors);
             sendLinkStateUpdate(neighbors);
 
@@ -79,10 +86,8 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
                 expected.remove(packet.getSource());
             }
 
-            end = System.currentTimeMillis() + LS_TIMEOUT;
-
             while (true) {
-                packet = socket.receive(LS_TIMEOUT);
+                packet = socket.receive(end - System.currentTimeMillis());
                 synchronized (this) {
                     if (packet == null && System.currentTimeMillis() > end) {
                         break;
@@ -99,6 +104,8 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
             }
 
             model.triggerFullUpdate();
+            
+            inUpdate = false;
 
             for (InetAddress addr : expected) {
                 System.out.println("DEBUG: Didn't receive a LS packet from: " + addr.toString());
@@ -110,8 +117,8 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
     @Override
     public void nodeAddCallback(InetAddress addr) {
         sendLinkStateUpdate(Arrays.asList(addr));
-        expected.add(addr);
-        synchronized (this) {
+        if (inUpdate) {
+            expected.add(addr);
             end = System.currentTimeMillis() + LS_TIMEOUT;
         }
     }

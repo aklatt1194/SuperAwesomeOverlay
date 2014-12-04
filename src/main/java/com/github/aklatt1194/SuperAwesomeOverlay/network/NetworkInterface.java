@@ -245,9 +245,15 @@ public class NetworkInterface implements Runnable {
         SimpleDatagramPacket packet = SimpleDatagramPacket.createFromBuffer(readBuffer,
                 socketChannel.socket().getInetAddress(), model.getSelfAddress());
 
+        SimpleSocket socket = portMap.get(packet.getDestinationPort());
+        if (socket == null) {
+            System.err.println("DEBUG: Read a packet addressed to a port no one is bound to");
+            return;
+        }
+        
         while (true) {
             try {
-                portMap.get(packet.getDestinationPort()).readQueue.put(packet);
+                socket.readQueue.put(packet);
                 break;
             } catch (InterruptedException e) {
                 continue;
