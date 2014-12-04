@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,9 +65,9 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
         }
 
         while (true) {
-            TopologyUpdate upd = null;
             SimpleDatagramPacket packet = null;
             List<InetAddress> neighbors = null;
+            List<TopologyUpdate> received = new LinkedList<>();
             expected.clear();
             
             // wait until we receive a LS packet
@@ -79,37 +80,38 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
             
             expected.addAll(neighbors);
             sendLinkStateUpdate(neighbors);
-
-            if (packet != null) {
-                upd = TopologyUpdate.deserialize(packet.getPayload());
-                model.recordLinkStateInformation(upd);
-                expected.remove(packet.getSource());
-            }
+            
+            end = System.currentTimeMillis() + LS_TIMEOUT;
 
             while (true) {
+                if (packet != null) {
+                    TopologyUpdate receivedUpdate = TopologyUpdate.deserialize(packet.getPayload());
+                    if (!expected.contains(receivedUpdate.src)) {
+                        sendLinkStateUpdate(Arrays.asList(receivedUpdate.src));
+                    }
+                    
+                    received.add(receivedUpdate);
+                    expected.remove(receivedUpdate.src);
+                }                
+                
                 packet = socket.receive(end - System.currentTimeMillis());
                 synchronized (this) {
                     if (packet == null && System.currentTimeMillis() > end) {
+                    	inUpdate = false;
                         break;
                     }
                 }
-                
-                if (packet == null) {
-                    continue;
-                }
-
-                upd = TopologyUpdate.deserialize(packet.getPayload());
-                model.recordLinkStateInformation(upd);
-                expected.remove(packet.getSource());
             }
 
             model.triggerFullUpdate();
-            
-            inUpdate = false;
 
             for (InetAddress addr : expected) {
                 System.out.println("DEBUG: Didn't receive a LS packet from: " + addr.toString());
                 NetworkInterface.getInstance().disconnectFromNode(addr);
+            }
+            
+            for (TopologyUpdate upd: received) {
+                model.recordLinkStateInformation(upd);
             }
         }
     }
@@ -117,9 +119,13 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
     @Override
     public void nodeAddCallback(InetAddress addr) {
         sendLinkStateUpdate(Arrays.asList(addr));
-        if (inUpdate) {
-            expected.add(addr);
-            end = System.currentTimeMillis() + LS_TIMEOUT;
+        synchronized (this) {
+            if (inUpdate) {
+                expected.add(addr);
+                end = System.currentTimeMillis() + LS_TIMEOUT;
+            } else {
+                inUpdate = true;
+            }
         }
     }
 
