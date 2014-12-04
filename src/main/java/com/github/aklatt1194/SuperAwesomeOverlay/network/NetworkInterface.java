@@ -168,10 +168,12 @@ public class NetworkInterface implements Runnable {
         InetAddress addr = socketChannel.socket().getInetAddress();
 
         // if a node that we are already connected to is connecting to us, we
-        // should keep that connection and discard the new one
+        // should do something
         if (tcpLinkTable.get(addr) != null) {
-            socketChannel.close();
-            return;
+            if (IPUtils.compareIPs(addr, model.getSelfAddress()) > 0 ) {
+                socketChannel.close();
+                return;
+            }
         }
 
         // add the new socketChannel to the table
@@ -192,10 +194,12 @@ public class NetworkInterface implements Runnable {
             socketChannel.finishConnect();
             InetAddress addr = socketChannel.socket().getInetAddress();
 
-            // Close up our old connection if we had one
+            // Do something if we're already connected
             if (tcpLinkTable.get(addr) != null) {
-                socketChannel.close();
-                return;
+                if (IPUtils.compareIPs(addr, model.getSelfAddress()) > 0 ) {
+                    socketChannel.close();
+                    return;
+                }
             }
 
             tcpLinkTable.put(addr, socketChannel);
@@ -347,10 +351,10 @@ public class NetworkInterface implements Runnable {
     public void connectAndAdd(InetAddress addr, boolean bootstrap) {
         if (!potentialNodes.contains(addr) && !addr.equals(model.getSelfAddress())) {
             // lets try to connect if we have a lower address
-            if (bootstrap || IPUtils.compareIPs(addr, model.getSelfAddress()) < 0) {
+            //if (bootstrap || IPUtils.compareIPs(addr, model.getSelfAddress()) < 0) {
                 potentialNodes.add(addr);
                 selector.wakeup();
-            }
+            //}
         }
     }
 
