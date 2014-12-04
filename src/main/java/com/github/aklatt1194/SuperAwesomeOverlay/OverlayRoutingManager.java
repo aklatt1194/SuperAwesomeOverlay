@@ -139,6 +139,7 @@ public class OverlayRoutingManager implements Runnable,
                 socket.send(packet);
             } catch (IOException e) {
                 // TODO -- not connected to this host
+                System.out.println("DEBUG: manager trying to send to closed socket");
             }
         }
 

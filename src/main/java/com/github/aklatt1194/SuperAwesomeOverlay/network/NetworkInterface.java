@@ -30,10 +30,9 @@ public class NetworkInterface implements Runnable {
 
     private Selector selector;
     private ByteBuffer readBuffer;
-    private BlockingQueue<ServerDataEvent> readPackets;
-    private BlockingQueue<ChangeRequest> pendingRequests;
+
+    private BlockingQueue<ChangeRequest> pendingChangeRequests;
     private Map<InetAddress, BlockingQueue<ByteBuffer>> pendingWrites;
-    private Map<SocketChannel, ByteBuffer> pendingReads;
 
     private BlockingQueue<InetAddress> potentialNodes;
     private BlockingQueue<InetAddress> nodesToRemove;
@@ -54,10 +53,8 @@ public class NetworkInterface implements Runnable {
 
         // various buffers to keep track of read/writes
         readBuffer = ByteBuffer.allocateDirect(8192);
-        readPackets = new LinkedBlockingQueue<>();
-        pendingRequests = new LinkedBlockingQueue<>();
+        pendingChangeRequests = new LinkedBlockingQueue<>();
         pendingWrites = new ConcurrentHashMap<>();
-        pendingReads = new ConcurrentHashMap<>();
 
         // the main selector that we will use
         selector = SelectorProvider.provider().openSelector();
@@ -76,10 +73,6 @@ public class NetworkInterface implements Runnable {
         Thread thread = new Thread(this);
         thread.start();
 
-        // start up the packet router
-        thread = new Thread(new PacketRouter());
-        thread.start();
-
         // try to connect to any of the bootstrap nodes (hopefully at least one)
         for (String node : NODES_BOOTSTRAP) {
             connectAndAdd(InetAddress.getByName(node));
@@ -90,20 +83,22 @@ public class NetworkInterface implements Runnable {
     public void run() {
         while (true) {
             try {
-                if (!pendingRequests.isEmpty()) {
-                    ChangeRequest request = pendingRequests.take();
-                    SelectionKey key = tcpLinkTable.get(request.addr).keyFor(selector);
-                    if (key != null && key.isValid()) {
-                        key.interestOps(request.ops);
+                if (!pendingChangeRequests.isEmpty()) {
+                    ChangeRequest request = pendingChangeRequests.take();
+                    SocketChannel socketChannel = tcpLinkTable.get(request.addr);
+                    if (socketChannel == null) {
+                        System.out
+                                .println("DEBUG: we are trying to change the op on a key for a socketchannel that we are no longer connected to.");
                     }
+
+                    SelectionKey key = socketChannel.keyFor(selector);
+                    key.interestOps(request.ops);
                 }
 
                 // wait for an event
                 this.selector.select();
 
                 while (!potentialNodes.isEmpty()) {
-                    // we must add any keys to the selector in the same thread
-                    // that we call select()
                     InetAddress addr = potentialNodes.poll();
                     SocketChannel socketChannel = SocketChannel.open();
                     socketChannel.configureBlocking(false);
@@ -123,19 +118,15 @@ public class NetworkInterface implements Runnable {
 
                     if (socketChannel != null) {
                         // get rid of any buffers that this channel may have had
-                        pendingReads.remove(socketChannel);
                         pendingWrites.remove(addr);
 
                         socketChannel.keyFor(selector).cancel();
                         try {
                             socketChannel.close();
                         } catch (IOException e) {
+                            System.out.println("DEBUG: exception on socket close");
                         }
 
-                        /** Debug stuff **/
-                        if (addr.equals(model.getSelfAddress())) {
-                            System.out.println("\n\n\nWhy are we deleting ourselves: run\n\n\n");
-                        }
                         model.deleteNode(addr);
                     }
                 }
@@ -171,19 +162,18 @@ public class NetworkInterface implements Runnable {
         ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
 
         SocketChannel socketChannel = serverSocketChannel.accept();
-        // Socket socket = socketChannel.socket(); // add something to table?
         socketChannel.configureBlocking(false);
 
         // figure out the remote address
         InetAddress addr = socketChannel.socket().getInetAddress();
 
-        // if a node that we are already connected to is connecting to us, we
-        // should remove the old socketchannel and use the new one
-        SocketChannel prevChannel = tcpLinkTable.get(addr);
-        if (prevChannel != null) {
-            prevChannel.keyFor(selector).cancel();
-            prevChannel.close();
-        }
+        // // if a node that we are already connected to is connecting to us, we
+        // // should remove the old socketchannel and use the new one
+        // SocketChannel prevChannel = tcpLinkTable.get(addr);
+        // if (prevChannel != null) {
+        // prevChannel.keyFor(selector).cancel();
+        // prevChannel.close();
+        // }
 
         // add the new socketChannel to the table
         tcpLinkTable.put(addr, socketChannel);
@@ -201,15 +191,14 @@ public class NetworkInterface implements Runnable {
 
         try {
             socketChannel.finishConnect();
-
             InetAddress addr = socketChannel.socket().getInetAddress();
 
-            // Close up our old connection if we had one
-            SocketChannel prevChannel = tcpLinkTable.get(addr);
-            if (prevChannel != null) {
-                prevChannel.keyFor(selector).cancel();
-                prevChannel.close();
-            }
+            // // Close up our old connection if we had one
+            // SocketChannel prevChannel = tcpLinkTable.get(addr);
+            // if (prevChannel != null) {
+            // prevChannel.keyFor(selector).cancel();
+            // prevChannel.close();
+            // }
 
             tcpLinkTable.put(addr, socketChannel);
             socketChannel.register(selector, SelectionKey.OP_READ);
@@ -234,33 +223,14 @@ public class NetworkInterface implements Runnable {
 
         if (numRead == -1) {
             // Remote closed socket cleanly
-            pendingReads.remove(socketChannel);
             pendingWrites.remove(socketChannel.socket().getInetAddress());
             try {
                 socketChannel.close();
             } catch (IOException e) {
+                System.out.println("DEBUG: Failed to close our end of a socketChannel.");
             }
             key.cancel();
 
-            /*
-             * TODO I temporarily removed this. I think it may be causing
-             * problems, and I am not sure when we need it.
-             * 
-             * We still remove cancel the key in the line preceding this
-             * comment. By commenting out the code below, we keep a reference to
-             * the socket channel in our table. Later on, if we try to get the
-             * key for that socketchannel and do something with it, we'll have
-             * an exception.
-             */
-
-            /*
-             * We shouldn't connect to ourselves in the first place.
-             * 
-             * // Debug stuff if (addr.equals(model.getSelfAddress())) {
-             * System.out
-             * .println("\n\n\nWhy are we deleting ourselves: read\n\n\n"); }
-             */
-            
             InetAddress addr = socketChannel.socket().getInetAddress();
             model.deleteNode(addr);
             tcpLinkTable.remove(addr);
@@ -268,49 +238,19 @@ public class NetworkInterface implements Runnable {
             return;
         }
 
-        readBuffer.flip();
-        ByteBuffer pendingBytes = pendingReads.get(socketChannel);
-        ByteBuffer totalBytes;
-
-        if (pendingBytes != null) {
-            pendingReads.put(socketChannel, null);
-            totalBytes = ByteBuffer.allocate(pendingBytes.remaining() + readBuffer.remaining());
-            totalBytes.put(pendingBytes);
-            totalBytes.put(readBuffer);
-        } else {
-            totalBytes = readBuffer;
-        }
-
-        totalBytes.rewind();
-
-        // stick the packet on the readPackets queue for the PacketHandler to
-        // deal with
+        // stick the packet on the read queue of the appropriate socket
         while (true) {
-            SimpleDatagramPacket packet = SimpleDatagramPacket.createFromBuffer(totalBytes,
+            SimpleDatagramPacket packet = SimpleDatagramPacket.createFromBuffer(readBuffer,
                     socketChannel.socket().getInetAddress(), model.getSelfAddress());
-
-            if (packet == null) {
-                if (totalBytes.remaining() > 0) {
-                    // if there are any bytes left, stick them on the pending
-                    // buffer. we will append them to the front of the read
-                    // buffer
-                    // the next time this method is called
-                    ByteBuffer remaining = ByteBuffer.allocate(totalBytes.remaining());
-                    remaining.put(totalBytes);
-                    pendingReads.put(socketChannel, remaining);
-                }
-                break;
-            }
 
             while (true) {
                 try {
-                    readPackets.put(new ServerDataEvent(socketChannel, packet));
+                    portMap.get(packet.getDestinationPort()).readQueue.put(packet);
                     break;
                 } catch (InterruptedException e) {
                     continue;
                 }
             }
-
         }
     }
 
@@ -328,13 +268,16 @@ public class NetworkInterface implements Runnable {
             } catch (IOException e) {
                 // If an exception occurs during a write, the node is probably
                 // gone
+                System.out.println("DEBUG: Socket write exception");
                 return;
             }
 
             if (buf.remaining() > 0) {
                 // the socket buffer is full
-                
-                // TODO: WTF - If we only write a partial packet to the socket, we need to keep the remaining bytes around to write once there is room.
+
+                // TODO: WTF - If we only write a partial packet to the socket,
+                // we need to keep the remaining bytes around to write once
+                // there is room.
                 break;
             }
             queue.remove();
@@ -348,7 +291,6 @@ public class NetworkInterface implements Runnable {
     // Queues up a packet so that it can be sent by the selector
     protected void send(SimpleDatagramPacket packet) throws IOException {
         // place a pending request on the queue for this destination address
-
         if (tcpLinkTable.get(packet.getDestination()) == null) {
             // we aren't actually connected to the destination
             // TODO:
@@ -357,7 +299,7 @@ public class NetworkInterface implements Runnable {
 
         while (true) {
             try {
-                pendingRequests.put(new ChangeRequest(packet.getDestination(),
+                pendingChangeRequests.put(new ChangeRequest(packet.getDestination(),
                         SelectionKey.OP_WRITE));
                 break;
             } catch (InterruptedException e) {
@@ -368,8 +310,7 @@ public class NetworkInterface implements Runnable {
         // place the data onto the pending writes queue for the proper socket
         BlockingQueue<ByteBuffer> queue = pendingWrites.get(packet.getDestination());
         if (queue == null) {
-            queue = new LinkedBlockingQueue<ByteBuffer>();
-            pendingWrites.put(packet.getDestination(), queue);
+            pendingWrites.put(packet.getDestination(), new LinkedBlockingQueue<ByteBuffer>());
         }
 
         while (true) {
@@ -432,38 +373,6 @@ public class NetworkInterface implements Runnable {
         }
     }
 
-    /**
-     * A thread that multiplexes incoming packets to the correct ports
-     */
-    private class PacketRouter implements Runnable {
-        @Override
-        public void run() {
-            ServerDataEvent dataEvent = null;
-
-            while (true) {
-                try {
-                    dataEvent = readPackets.take();
-                } catch (InterruptedException e) {
-                    continue;
-                }
-
-                if (portMap.get(dataEvent.packet.getDestinationPort()) == null) {
-                    // this port isn't open, drop packet
-                    continue;
-                }
-
-                BlockingQueue<SimpleDatagramPacket> readQueue = portMap.get(dataEvent.packet
-                        .getDestinationPort()).readQueue;
-
-                try {
-                    readQueue.put(dataEvent.packet);
-                } catch (InterruptedException e) {
-                    continue;
-                }
-            }
-        }
-    }
-
     // helper class with the fields needed to queue up a key change request
     private class ChangeRequest {
         private InetAddress addr;
@@ -474,17 +383,4 @@ public class NetworkInterface implements Runnable {
             this.ops = ops;
         }
     }
-
-    // helper class with the fields needed to queue up a server read event
-    @SuppressWarnings("unused")
-    private class ServerDataEvent {
-        private SocketChannel socket;
-        private SimpleDatagramPacket packet;
-
-        private ServerDataEvent(SocketChannel socket, SimpleDatagramPacket packet) {
-            this.socket = socket;
-            this.packet = packet;
-        }
-    }
-
 }
