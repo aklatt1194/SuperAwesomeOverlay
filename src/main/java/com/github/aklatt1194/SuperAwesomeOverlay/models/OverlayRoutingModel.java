@@ -66,10 +66,16 @@ public class OverlayRoutingModel {
         listeners.add(listener);
     }
 
-    public synchronized void notifyNodeListeners() {
+    public synchronized void notifyListenersAdd(InetAddress addr) {
         for (OverlayRoutingModelListener listener : listeners) {
-            listener.nodeChangeCallback();
+            listener.nodeAddCallback(addr);
         }
+    }
+    
+    public synchronized void notifyListenersDelete(InetAddress addr) {
+        for (OverlayRoutingModelListener listener : listeners) {
+            listener.nodeDeleteCallback(addr);
+        }        
     }
 
     /**
@@ -80,7 +86,7 @@ public class OverlayRoutingModel {
         // Update known nodes let addNode take care of preventing duplicates
         for (InetAddress addr : newValues.keySet()) {
             if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
-                NetworkInterface.getInstance().connectAndAdd(addr, false);
+                NetworkInterface.getInstance().connectAndAdd(addr);
             }
         }
         // Add this update to the pending queue
@@ -113,7 +119,7 @@ public class OverlayRoutingModel {
     public synchronized void addNode(InetAddress addr) {
         if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
             nodesToAdd.add(addr);
-            notifyNodeListeners();
+            notifyListenersAdd(addr);
         }
     }
 
@@ -134,7 +140,7 @@ public class OverlayRoutingModel {
         // remove the node immediately from the tree
         triggerFullUpdate();
 
-        notifyNodeListeners();
+        notifyListenersDelete(addr);
     }
 
     /**

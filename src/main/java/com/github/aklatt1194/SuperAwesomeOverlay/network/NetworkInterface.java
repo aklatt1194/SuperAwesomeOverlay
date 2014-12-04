@@ -76,7 +76,7 @@ public class NetworkInterface implements Runnable {
 
         // try to connect to any of the bootstrap nodes (hopefully at least one)
         for (String node : NODES_BOOTSTRAP) {
-            connectAndAdd(InetAddress.getByName(node), true);
+            connectAndAdd(InetAddress.getByName(node));
         }
     }
 
@@ -170,7 +170,7 @@ public class NetworkInterface implements Runnable {
         // if a node that we are already connected to is connecting to us, we
         // should do something
         if (tcpLinkTable.get(addr) != null) {
-            if (IPUtils.compareIPs(addr, model.getSelfAddress()) > 0 ) {
+            if (IPUtils.compareIPs(addr, model.getSelfAddress()) > 0) {
                 socketChannel.close();
                 return;
             }
@@ -196,7 +196,7 @@ public class NetworkInterface implements Runnable {
 
             // Do something if we're already connected
             if (tcpLinkTable.get(addr) != null) {
-                if (IPUtils.compareIPs(addr, model.getSelfAddress()) > 0 ) {
+                if (IPUtils.compareIPs(addr, model.getSelfAddress()) > 0) {
                     socketChannel.close();
                     return;
                 }
@@ -348,13 +348,10 @@ public class NetworkInterface implements Runnable {
      * 
      * @param addr The node to attempt to connect to and add
      */
-    public void connectAndAdd(InetAddress addr, boolean bootstrap) {
+    public void connectAndAdd(InetAddress addr) {
         if (!potentialNodes.contains(addr) && !addr.equals(model.getSelfAddress())) {
-            // lets try to connect if we have a lower address
-            //if (bootstrap || IPUtils.compareIPs(addr, model.getSelfAddress()) < 0) {
-                potentialNodes.add(addr);
-                selector.wakeup();
-            //}
+            potentialNodes.add(addr);
+            selector.wakeup();
         }
     }
 

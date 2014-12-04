@@ -3,6 +3,8 @@ package com.github.aklatt1194.SuperAwesomeOverlay;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -17,27 +19,30 @@ import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
-public class OverlayRoutingManager implements Runnable,
-        OverlayRoutingModelListener {
+public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListener {
     public static final int ROUTING_UPDATE_SIZE = 8192;
     public static final int PORT = 55555;
     public static final long LINK_STATE_PERIOD = 1000 * 60; // 60 sec
     public static final long METRIC_AVERAGE_PERIOD = 60 * 1000 * 5; // 5 min
-    public static final long LS_TIMEOUT = 2 * 1000;
+    public static final long LS_TIMEOUT = 5 * 1000;
     public static final long BOOTUP_TIME = 2 * 1000;
 
     private BaseLayerSocket socket;
     private MetricsDatabaseManager db;
     private OverlayRoutingModel model;
+    private Set<InetAddress> expected;
+
+    private volatile long end;
 
     private Thread managerThread;
 
-    public OverlayRoutingManager(OverlayRoutingModel model,
-            MetricsDatabaseManager db) {
+    public OverlayRoutingManager(OverlayRoutingModel model, MetricsDatabaseManager db) {
         this.db = db;
         this.model = model;
         this.socket = new BaseLayerSocket();
         this.socket.bind(PORT);
+
+        expected = Collections.synchronizedSet(new HashSet<InetAddress>());
 
         model.addListener(this);
 
@@ -57,43 +62,59 @@ public class OverlayRoutingManager implements Runnable,
         }
 
         while (true) {
-            Set<InetAddress> expected = null;
             TopologyUpdate upd = null;
             SimpleDatagramPacket packet = null;
+            expected.clear();
             
-            try {
-                packet = socket.interruptibleReceive(LINK_STATE_PERIOD);
-            } catch (InterruptedException e) {
-            }
-            
-            expected = new HashSet<>(model.getKnownNeighbors());
-            sendLinkStateUpdate(model.getKnownNeighbors());
-            
+            // wait until we receive a LS packet
+            packet = socket.receive(LINK_STATE_PERIOD);
+
+            List<InetAddress> neighbors = model.getKnownNeighbors();
+            expected.addAll(neighbors);
+            sendLinkStateUpdate(neighbors);
+
             if (packet != null) {
                 upd = TopologyUpdate.deserialize(packet.getPayload());
                 model.recordLinkStateInformation(upd);
                 expected.remove(packet.getSource());
             }
-            
+
+            end = System.currentTimeMillis() + LS_TIMEOUT;
+
             while (true) {
                 packet = socket.receive(LS_TIMEOUT);
-                if (packet == null) {
-                    break;
+                synchronized (this) {
+                    if (packet == null && System.currentTimeMillis() > end) {
+                        break;
+                    }
                 }
-                
+
                 upd = TopologyUpdate.deserialize(packet.getPayload());
                 model.recordLinkStateInformation(upd);
                 expected.remove(packet.getSource());
             }
-            
+
             model.triggerFullUpdate();
-            
 
             for (InetAddress addr : expected) {
                 System.out.println("DEBUG: Didn't receive a LS packet from: " + addr.toString());
                 NetworkInterface.getInstance().disconnectFromNode(addr);
             }
         }
+    }
+    
+    @Override
+    public void nodeAddCallback(InetAddress addr) {
+        sendLinkStateUpdate(Arrays.asList(addr));
+        expected.add(addr);
+        synchronized (this) {
+            end = System.currentTimeMillis() + LS_TIMEOUT;
+        }
+    }
+
+    @Override
+    public void nodeDeleteCallback(InetAddress addr) {
+        // TODO Auto-generated method stub
     }
 
     /**
@@ -108,8 +129,8 @@ public class OverlayRoutingManager implements Runnable,
 
         // Send it to all of our neighbors
         for (InetAddress dst : dests) {
-            SimpleDatagramPacket packet = new SimpleDatagramPacket(upd.src,
-                    dst, PORT, PORT, upd.serialize());
+            SimpleDatagramPacket packet = new SimpleDatagramPacket(upd.src, dst, PORT, PORT,
+                    upd.serialize());
             try {
                 socket.send(packet);
             } catch (IOException e) {
@@ -135,21 +156,23 @@ public class OverlayRoutingManager implements Runnable,
         for (InetAddress addr : model.getKnownNeighbors()) {
             String node = addr.getHostAddress();
 
-            Map<Long, Double> latencies = db.getLatencyData(node, time
-                    - METRIC_AVERAGE_PERIOD, time);
-            Map<Long, Double> throughputs = db.getThroughputData(node, time
-                    - METRIC_AVERAGE_PERIOD, time);
+            Map<Long, Double> latencies = db.getLatencyData(node, time - METRIC_AVERAGE_PERIOD,
+                    time);
+            Map<Long, Double> throughputs = db.getThroughputData(node,
+                    time - METRIC_AVERAGE_PERIOD, time);
 
-            // If we don't have any recent data, get the most recent data that we do have
+            // If we don't have any recent data, get the most recent data that
+            // we do have
             if (latencies.isEmpty()) {
                 long lastTime = db.getLastLatencyRecordTime(node);
                 latencies = db.getLatencyData(node, lastTime - METRIC_AVERAGE_PERIOD, lastTime + 1);
             }
             if (throughputs.isEmpty()) {
                 long lastTime = db.getLastThroughputRecordTime(node);
-                throughputs = db.getThroughputData(node, lastTime - METRIC_AVERAGE_PERIOD, lastTime + 1);
+                throughputs = db.getThroughputData(node, lastTime - METRIC_AVERAGE_PERIOD,
+                        lastTime + 1);
             }
-            
+
             double avgLat = getAvg(latencies);
             double avgThrough = getAvg(throughputs);
 
@@ -180,12 +203,6 @@ public class OverlayRoutingManager implements Runnable,
         avg /= stats.size();
 
         return avg;
-    }
-
-    @Override
-    public void nodeChangeCallback() {
-        // Interrupt the thread so that it will do a LSU
-        managerThread.interrupt();
     }
 
     public static class TopologyUpdate {
