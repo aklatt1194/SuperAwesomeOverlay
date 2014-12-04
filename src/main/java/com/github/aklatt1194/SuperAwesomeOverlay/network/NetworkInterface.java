@@ -19,7 +19,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class NetworkInterface implements Runnable {
-    public static final String[] NODES_BOOTSTRAP = { "ec2-54-149-47-168.us-west-2.compute.amazonaws.com" };
+    public static final String[] NODES_BOOTSTRAP = { "c-174-61-223-52.hsd1.wa.comcast.net"};//ec2-54-149-47-168.us-west-2.compute.amazonaws.com" };
     private static final int LINK_PORT = 3333;
 
     private static NetworkInterface instance = null;
