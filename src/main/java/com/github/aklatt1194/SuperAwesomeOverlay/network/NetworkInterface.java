@@ -19,7 +19,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class NetworkInterface implements Runnable {
-    public static final String[] NODES_BOOTSTRAP = { "c-174-61-223-52.hsd1.wa.comcast.net"};//ec2-54-149-47-168.us-west-2.compute.amazonaws.com" };
+    public static final String[] NODES_BOOTSTRAP = { "c-174-61-223-52.hsd1.wa.comcast.net" };// ec2-54-149-47-168.us-west-2.compute.amazonaws.com"
+                                                                                             // };
     private static final int LINK_PORT = 3333;
 
     private static NetworkInterface instance = null;
@@ -168,13 +169,12 @@ public class NetworkInterface implements Runnable {
         // figure out the remote address
         InetAddress addr = socketChannel.socket().getInetAddress();
 
-        // // if a node that we are already connected to is connecting to us, we
-        // // should remove the old socketchannel and use the new one
-        // SocketChannel prevChannel = tcpLinkTable.get(addr);
-        // if (prevChannel != null) {
-        // prevChannel.keyFor(selector).cancel();
-        // prevChannel.close();
-        // }
+        // if a node that we are already connected to is connecting to us, we
+        // should keep that connection and discard the new one
+        if (tcpLinkTable.get(addr) != null) {
+            socketChannel.close();
+            return;
+        }
 
         // add the new socketChannel to the table
         tcpLinkTable.put(addr, socketChannel);
@@ -194,12 +194,11 @@ public class NetworkInterface implements Runnable {
             socketChannel.finishConnect();
             InetAddress addr = socketChannel.socket().getInetAddress();
 
-            // // Close up our old connection if we had one
-            // SocketChannel prevChannel = tcpLinkTable.get(addr);
-            // if (prevChannel != null) {
-            // prevChannel.keyFor(selector).cancel();
-            // prevChannel.close();
-            // }
+            // Close up our old connection if we had one
+            if (tcpLinkTable.get(addr) != null) {
+                socketChannel.close();
+                return;
+            }
 
             tcpLinkTable.put(addr, socketChannel);
             socketChannel.register(selector, SelectionKey.OP_READ);
