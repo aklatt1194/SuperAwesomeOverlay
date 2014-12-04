@@ -81,7 +81,7 @@ public class OverlayRoutingModel {
     /**
      * The lazy update method used for each link state packet
      */
-    public synchronized void recordLinkStateInformation(TopologyUpdate update) {
+    public synchronized void recordLinkStateInformation(List<TopologyUpdate> updates) {
         Map<InetAddress, Double> newValues = update.metrics;
         // Update known nodes let addNode take care of preventing duplicates
         for (InetAddress addr : newValues.keySet()) {

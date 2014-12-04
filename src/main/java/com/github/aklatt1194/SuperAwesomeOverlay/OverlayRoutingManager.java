@@ -103,8 +103,6 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
                 }
             }
 
-            model.triggerFullUpdate();
-
             for (InetAddress addr : expected) {
                 System.out.println("DEBUG: Didn't receive a LS packet from: " + addr.toString());
                 NetworkInterface.getInstance().disconnectFromNode(addr);
@@ -113,6 +111,8 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
             for (TopologyUpdate upd: received) {
                 model.recordLinkStateInformation(upd);
             }
+            
+            model.triggerFullUpdate();
         }
     }
     
