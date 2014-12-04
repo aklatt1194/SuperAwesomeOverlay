@@ -19,8 +19,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class NetworkInterface implements Runnable {
-    public static final String[] NODES_BOOTSTRAP = { "c-174-61-223-52.hsd1.wa.comcast.net" };// ec2-54-149-47-168.us-west-2.compute.amazonaws.com"
-                                                                                             // };
+    public static final String[] NODES_BOOTSTRAP = { "ec2-54-149-47-168.us-west-2.compute.amazonaws.com" };
     private static final int LINK_PORT = 3333;
 
     private static NetworkInterface instance = null;
@@ -88,8 +87,6 @@ public class NetworkInterface implements Runnable {
                     ChangeRequest request = pendingChangeRequests.take();
                     SocketChannel socketChannel = tcpLinkTable.get(request.addr);
                     if (socketChannel == null) {
-                        System.out
-                                .println("DEBUG: we are trying to change the op on a key for a socketchannel that we are no longer connected to.");
                         break;
                     }
 
@@ -251,7 +248,6 @@ public class NetworkInterface implements Runnable {
                 continue;
             }
         }
-        System.out.println("DEBUG: reveived packet from: " + packet.getSource());
     }
 
     // pull any pending writes of a socket's queue and write them to the socket

@@ -88,7 +88,11 @@ public class OverlayRoutingManager implements Runnable,
             
             model.triggerFullUpdate();
             
-            System.out.println("DEBUG: Didn't receive a LS packet from: " + expected.toString());
+
+            for (InetAddress addr : expected) {
+                System.out.println("DEBUG: Didn't receive a LS packet from: " + addr.toString());
+                NetworkInterface.getInstance().disconnectFromNode(addr);
+            }
         }
     }
 
