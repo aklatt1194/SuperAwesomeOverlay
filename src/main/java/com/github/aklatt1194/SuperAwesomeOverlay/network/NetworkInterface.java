@@ -308,7 +308,8 @@ public class NetworkInterface implements Runnable {
         // place the data onto the pending writes queue for the proper socket
         BlockingQueue<ByteBuffer> queue = pendingWrites.get(packet.getDestination());
         if (queue == null) {
-            pendingWrites.put(packet.getDestination(), new LinkedBlockingQueue<ByteBuffer>());
+            queue = new LinkedBlockingQueue<ByteBuffer>();
+            pendingWrites.put(packet.getDestination(), queue);
         }
 
         while (true) {
