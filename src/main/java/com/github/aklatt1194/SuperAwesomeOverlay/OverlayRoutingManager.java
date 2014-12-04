@@ -3,6 +3,7 @@ package com.github.aklatt1194.SuperAwesomeOverlay;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -64,11 +65,10 @@ public class OverlayRoutingManager implements Runnable,
         while (true) {
             // Should we be initiating a link state update
             if (forceLinkState || (System.currentTimeMillis() - lastLinkState) > LINK_STATE_PERIOD) {
-                sendLinkStateUpdate(model.getKnownNeighbors());
+             // Nodes we are expecting to receive ls updates from
+                expected = new HashSet<InetAddress>(model.getKnownNeighbors()); 
+                sendLinkStateUpdate(new ArrayList<InetAddress>(expected));
                 forceLinkState = false;
-                
-                // Nodes we are expecting to receive ls updates from
-                expected = new HashSet<InetAddress>(model.getKnownNeighbors());
             } else {
                 // If we received a link state packet, initiate an update
                 SimpleDatagramPacket initPacket;
@@ -87,17 +87,12 @@ public class OverlayRoutingManager implements Runnable,
                     TopologyUpdate initUpd = TopologyUpdate
                             .deserialize(initPacket.getPayload());
                     model.recordLinkStateInformation(initUpd);
-
+                    
+                    // We are expecting to hear from all of our neighbors
+                    expected = new HashSet<InetAddress>(model.getKnownNeighbors());
+                    
                     // Send out our own ls update
-                    sendLinkStateUpdate(model.getKnownNeighbors());
-
-                    // We are expecting to hear from everyone that the src of
-                    // this update knows about
-                    expected = new HashSet<InetAddress>();
-                    for (InetAddress addr : initUpd.metrics.keySet()) {
-                        if (!addr.equals(initUpd.src))
-                            expected.add(addr);
-                    }
+                    sendLinkStateUpdate(new ArrayList<InetAddress>(expected));
                 }
             }
 

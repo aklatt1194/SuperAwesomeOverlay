@@ -21,8 +21,8 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 public class NetworkInterface implements Runnable {
     public static final String[] NODES_BOOTSTRAP = {
             // "c-174-61-223-52.hsd1.wa.comcast.net", // for testing purposes
-            "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com",
-            "ec2-54-64-177-145.ap-northeast-1.compute.amazonaws.com",
+            //"ec2-54-72-49-50.eu-west-1.compute.amazonaws.com",
+            //"ec2-54-64-177-145.ap-northeast-1.compute.amazonaws.com",
             "ec2-54-172-69-181.compute-1.amazonaws.com" };
     private static final int LINK_PORT = 3333;
 
@@ -238,7 +238,10 @@ public class NetworkInterface implements Runnable {
             } catch (IOException e) {
             }
             key.cancel();
-
+            
+            // DEBUG
+            System.out.println("\n\n\nWe probably shouldn't be reading -1 bytes\n\n");
+            
             InetAddress addr = socketChannel.socket().getInetAddress();
             model.deleteNode(addr);
             tcpLinkTable.remove(addr);
@@ -400,6 +403,9 @@ public class NetworkInterface implements Runnable {
      * @param addr The node to attempt to disconnect from and remove
      */
     public void disconnectFromNode(InetAddress addr) {
+        // DEBUG
+        System.out.println("\n\n\nWe probably shouldn't be disconnecting from a node!\n\n");
+        
         if (tcpLinkTable.containsKey(addr)) {
             // let's check that it is actually in the table before we bother
             // waking the selector up
