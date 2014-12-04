@@ -89,6 +89,7 @@ public class NetworkInterface implements Runnable {
                     if (socketChannel == null) {
                         System.out
                                 .println("DEBUG: we are trying to change the op on a key for a socketchannel that we are no longer connected to.");
+                        break;
                     }
 
                     SelectionKey key = socketChannel.keyFor(selector);
@@ -251,6 +252,7 @@ public class NetworkInterface implements Runnable {
                 continue;
             }
         }
+        System.out.println("DEBUG: reveived packet from: " + packet.getSource());
     }
 
     // pull any pending writes of a socket's queue and write them to the socket
