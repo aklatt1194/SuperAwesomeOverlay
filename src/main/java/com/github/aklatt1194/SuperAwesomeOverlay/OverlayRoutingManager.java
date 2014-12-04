@@ -88,6 +88,10 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
                         break;
                     }
                 }
+                
+                if (packet == null) {
+                    continue;
+                }
 
                 upd = TopologyUpdate.deserialize(packet.getPayload());
                 model.recordLinkStateInformation(upd);
