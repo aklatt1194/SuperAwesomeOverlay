@@ -184,7 +184,7 @@ public class NetworkInterface implements Runnable {
 
         // if a node that we are already connected to is connecting to us, we
         // should remove the old socketchannel and use the new one
-        SocketChannel prevChannel = tcpLinkTable.get(addr);
+        SocketChannel prevChannel = tcpLinkTable.get(addr.getHostAddress());
         if (prevChannel != null) {
             prevChannel.keyFor(selector).cancel();
             prevChannel.close();
@@ -211,7 +211,7 @@ public class NetworkInterface implements Runnable {
             
             // if a node that we are already connected to is connecting to us, we
             // should remove the old socketchannel and use the new one
-            SocketChannel prevChannel = tcpLinkTable.get(addr);
+            SocketChannel prevChannel = tcpLinkTable.get(addr.getHostAddress());
             if (prevChannel != null) {
                 prevChannel.keyFor(selector).cancel();
                 prevChannel.close();
