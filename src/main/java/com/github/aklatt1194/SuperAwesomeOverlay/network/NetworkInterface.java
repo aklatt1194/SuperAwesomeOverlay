@@ -208,6 +208,15 @@ public class NetworkInterface implements Runnable {
             socketChannel.finishConnect();
 
             InetAddress addr = socketChannel.socket().getInetAddress();
+            
+            // if a node that we are already connected to is connecting to us, we
+            // should remove the old socketchannel and use the new one
+            SocketChannel prevChannel = tcpLinkTable.get(addr);
+            if (prevChannel != null) {
+                prevChannel.keyFor(selector).cancel();
+                prevChannel.close();
+            }
+            
             tcpLinkTable.put(addr.getHostAddress(), socketChannel);
             socketChannel.register(selector, SelectionKey.OP_READ);
             model.addNode(addr);
@@ -404,7 +413,7 @@ public class NetworkInterface implements Runnable {
      */
     public void disconnectFromNode(InetAddress addr) {
         // DEBUG
-        System.out.println("We probably should not be disconnecting");
+        System.out.println("\n\n\nWe probably should not be disconnecting\n\n");
         if (tcpLinkTable.containsKey(addr)) {
             // let's check that it is actually in the table before we bother
             // waking the selector up

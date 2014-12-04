@@ -68,12 +68,14 @@ public class OverlayRoutingManager implements Runnable,
              // Nodes we are expecting to receive ls updates from
                 expected = new HashSet<InetAddress>(model.getKnownNeighbors()); 
                 
+                /**
                 // DEBUG
                 System.out.println(System.currentTimeMillis() + ": Start of new ls update");
                 System.out.print(System.currentTimeMillis() + ": Sending ls packets to:");
                 for (InetAddress addr: expected)
                     System.out.print(" " + addr);
                 System.out.println();
+                */
                 
                 sendLinkStateUpdate(new ArrayList<InetAddress>(expected));
                 forceLinkState = false;
@@ -96,18 +98,22 @@ public class OverlayRoutingManager implements Runnable,
                             .deserialize(initPacket.getPayload());
                     model.recordLinkStateInformation(initUpd);
                     
+                    /**
                     // DEBUG
                     System.out.println(System.currentTimeMillis() + ": Start of new ls update");
                     System.out.println(System.currentTimeMillis() + ": Recieved ls from " + initUpd.src);
+                    */
                     
                     // We are expecting to hear from all of our neighbors
                     expected = new HashSet<InetAddress>(model.getKnownNeighbors());
                     
+                    /**
                     // DEBUG
                     System.out.print(System.currentTimeMillis() + ": Sending ls packets to:");
                     for (InetAddress addr: expected)
                         System.out.print(" " + addr);
                     System.out.println();
+                    */
                     
                     // Send out our own ls update
                     sendLinkStateUpdate(new ArrayList<InetAddress>(expected));
@@ -134,8 +140,10 @@ public class OverlayRoutingManager implements Runnable,
                             .getPayload());
                     model.recordLinkStateInformation(upd);
                     
+                    /**
                     // DEBUG
                     System.out.println(System.currentTimeMillis() + ": Recieved ls from " + upd.src);
+                    */
                    
                     
                     expected.remove(upd.src);
