@@ -20,7 +20,7 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class NetworkInterface implements Runnable {
-    public static final String[] NODES_BOOTSTRAP = { "ec2-54-149-47-168.us-west-2.compute.amazonaws.com" };
+    public static final String[] NODES_BOOTSTRAP = {"ec2-54-149-47-168.us-west-2.compute.amazonaws.com", "ec2-54-93-174-218.eu-central-1.compute.amazonaws.com"};
     private static final int LINK_PORT = 3333;
 
     private static NetworkInterface instance = null;
