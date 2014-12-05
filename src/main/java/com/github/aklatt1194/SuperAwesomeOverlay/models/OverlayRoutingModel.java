@@ -5,11 +5,14 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Queue;
+import java.util.Set;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.OverlayRoutingManager.TopologyUpdate;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
@@ -21,7 +24,6 @@ public class OverlayRoutingModel {
     public List<OverlayRoutingModelListener> listeners;
 
     // Used for managing the matrix of metrics
-    private Queue<TopologyUpdate> pendingUpdates;
     private Queue<InetAddress> nodesToAdd;
     private Map<InetAddress, Integer> nodeToIndex;
     private InetAddress[] indexToNode;
@@ -49,7 +51,6 @@ public class OverlayRoutingModel {
         indexToNode = new InetAddress[] { selfAddress };
         nodeToIndex.put(selfAddress, 0);
 
-        pendingUpdates = new LinkedList<TopologyUpdate>();
         nodesToAdd = new LinkedList<InetAddress>();
 
         metrics = new double[nodeToIndex.size()][nodeToIndex.size()];
@@ -79,30 +80,28 @@ public class OverlayRoutingModel {
     }
 
     /**
-     * The lazy update method used for each link state packet
-     */
-    public synchronized void recordLinkStateInformation(List<TopologyUpdate> updates) {
-        Map<InetAddress, Double> newValues = update.metrics;
-        // Update known nodes let addNode take care of preventing duplicates
-        for (InetAddress addr : newValues.keySet()) {
-            if (!nodeToIndex.containsKey(addr) && !nodesToAdd.contains(addr)) {
-                NetworkInterface.getInstance().connectAndAdd(addr);
-            }
-        }
-        // Add this update to the pending queue
-        pendingUpdates.add(update);
-    }
-
-    /**
      * Trigger all of the batched link state updates to rebuild the model
      */
-    public synchronized void triggerFullUpdate() {
+    public synchronized void update(List<TopologyUpdate> updates) {
+        Set<InetAddress> potentialNodes = new HashSet<>();
+        
         // Rebuild the matrix
         rebuildMatrix();
 
-        // Apply all of the new info from the link state packets
-        while (!pendingUpdates.isEmpty()) {
-            updateMetrics(pendingUpdates.remove());
+        for (TopologyUpdate update : updates) {
+            if (nodeToIndex.get(update.src) != null) {
+                for (Entry<InetAddress, Double> entry : update.metrics.entrySet()) {
+                    if (nodeToIndex.containsKey(entry.getKey())) {
+                        insertMetricTable(nodeToIndex.get(entry.getKey()), nodeToIndex.get(update.src), entry.getValue());
+                    } else {
+                        potentialNodes.add(entry.getKey());
+                    }
+                }   
+            }
+        }
+        
+        for (InetAddress addr : potentialNodes) {
+            NetworkInterface.getInstance().connectAndAdd(addr);
         }
 
         // Build the tree
@@ -138,8 +137,7 @@ public class OverlayRoutingModel {
         }
 
         // remove the node immediately from the tree
-        triggerFullUpdate();
-
+        update(Arrays.asList());
         notifyListenersDelete(addr);
     }
 
@@ -179,32 +177,6 @@ public class OverlayRoutingModel {
 
     public synchronized InetAddress getSelfAddress() {
         return selfAddress;
-    }
-
-    /**
-     * Update values in the table without creating a new table (all nodes must
-     * be in the matrix already)
-     */
-    private void updateMetrics(TopologyUpdate update) {
-        InetAddress src = update.src;
-        Map<InetAddress, Double> values = update.metrics;
-
-        if (src == null) {
-            // TODO -- It is possible that a node sent a link state packet, that
-            // packet got queued, and then the node disconnected before we got
-            // to this point?
-            return;
-        }
-
-        int row = nodeToIndex.get(src);
-
-        // Update the metrics
-        for (int i = 0; i < metrics.length; i++) {
-            if (!values.containsKey(indexToNode[i]))
-                insertMetricTable(row, i, DEFAULT_METRIC);
-            else
-                insertMetricTable(row, i, values.get(indexToNode[i]));
-        }
     }
 
     /**

@@ -35,6 +35,8 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
 
     private volatile long end;
     private volatile boolean inUpdate;
+    
+    private TopologyUpdate ourUpdate;
 
     private Thread managerThread;
 
@@ -46,6 +48,8 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
 
         expected = Collections.synchronizedSet(new HashSet<InetAddress>());
         inUpdate = false;
+        
+        ourUpdate = getMetricsFromDB();
 
         model.addListener(this);
 
@@ -71,15 +75,22 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
             expected.clear();
             
             // wait until we receive a LS packet
-            packet = socket.receive(LINK_STATE_PERIOD);
+            try {
+                packet = socket.interruptibleReceive(LINK_STATE_PERIOD);
+            } catch (InterruptedException e) { }
+            
+            ourUpdate = getMetricsFromDB();
             
             synchronized (this) {
                 inUpdate = true; // flag that we are in an update
                 neighbors = model.getKnownNeighbors();
             }
             
+            TopologyUpdate ourUpdate = getMetricsFromDB();
+            received.add(ourUpdate);
+            
             expected.addAll(neighbors);
-            sendLinkStateUpdate(neighbors);
+            sendLinkStateUpdate(neighbors, ourUpdate);
             
             end = System.currentTimeMillis() + LS_TIMEOUT;
 
@@ -87,7 +98,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
                 if (packet != null) {
                     TopologyUpdate receivedUpdate = TopologyUpdate.deserialize(packet.getPayload());
                     if (!expected.contains(receivedUpdate.src)) {
-                        sendLinkStateUpdate(Arrays.asList(receivedUpdate.src));
+                        sendLinkStateUpdate(Arrays.asList(receivedUpdate.src), ourUpdate);
                     }
                     
                     received.add(receivedUpdate);
@@ -108,23 +119,18 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
                 NetworkInterface.getInstance().disconnectFromNode(addr);
             }
             
-            for (TopologyUpdate upd: received) {
-                model.recordLinkStateInformation(upd);
-            }
-            
-            model.triggerFullUpdate();
+            model.update(received);
         }
     }
     
     @Override
     public void nodeAddCallback(InetAddress addr) {
-        sendLinkStateUpdate(Arrays.asList(addr));
         synchronized (this) {
             if (inUpdate) {
                 expected.add(addr);
                 end = System.currentTimeMillis() + LS_TIMEOUT;
             } else {
-                inUpdate = true;
+                managerThread.interrupt();
             }
         }
     }
@@ -138,12 +144,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
      * Send out a link state update to all of our neighbors and apply it to
      * ourself
      */
-    private void sendLinkStateUpdate(List<InetAddress> dests) {
-        // Get the update from the db
-        TopologyUpdate upd = getMetricsFromDB();
-        // Apply it to ourselves
-        model.recordLinkStateInformation(upd);
-
+    private void sendLinkStateUpdate(List<InetAddress> dests, TopologyUpdate upd) {
         // Send it to all of our neighbors
         for (InetAddress dst : dests) {
             SimpleDatagramPacket packet = new SimpleDatagramPacket(upd.src, dst, PORT, PORT,

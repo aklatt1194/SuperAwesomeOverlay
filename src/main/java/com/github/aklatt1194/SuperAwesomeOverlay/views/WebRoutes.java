@@ -6,7 +6,7 @@ import spark.template.freemarker.FreeMarkerEngine;
 
 public class WebRoutes {
     public WebRoutes() {
-      setPort(8080);
+      setPort(80);
       
       externalStaticFileLocation("src/main/resources/static");
       
