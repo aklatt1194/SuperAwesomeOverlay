@@ -39,8 +39,7 @@ public class OverlayRoutingModel {
         try {
             selfAddress = IPUtils.getExternalAddress(); // Put ourselves in
         } catch (IOException e) {
-            System.err
-                    .println("Error: Unable to determine external IP address");
+            System.err.println("Error: Unable to determine external IP address");
             System.exit(1);
         }
 
@@ -55,12 +54,7 @@ public class OverlayRoutingModel {
 
         metrics = new double[nodeToIndex.size()][nodeToIndex.size()];
 
-        // Fill metrics with default values to start
-        for (int i = 0; i < metrics.length; i++) {
-            for (int j = 0; j < metrics.length; j++) {
-                metrics[i][j] = DEFAULT_METRIC;
-            }
-        }
+        clearMatrix();
     }
 
     public synchronized void addListener(OverlayRoutingModelListener listener) {
@@ -72,11 +66,11 @@ public class OverlayRoutingModel {
             listener.nodeAddCallback(addr);
         }
     }
-    
+
     public synchronized void notifyListenersDelete(InetAddress addr) {
         for (OverlayRoutingModelListener listener : listeners) {
             listener.nodeDeleteCallback(addr);
-        }        
+        }
     }
 
     /**
@@ -84,7 +78,7 @@ public class OverlayRoutingModel {
      */
     public synchronized void update(List<TopologyUpdate> updates) {
         Set<InetAddress> potentialNodes = new HashSet<>();
-        
+
         // Rebuild the matrix
         rebuildMatrix();
 
@@ -92,14 +86,19 @@ public class OverlayRoutingModel {
             if (nodeToIndex.get(update.src) != null) {
                 for (Entry<InetAddress, Double> entry : update.metrics.entrySet()) {
                     if (nodeToIndex.containsKey(entry.getKey())) {
-                        insertMetricTable(nodeToIndex.get(entry.getKey()), nodeToIndex.get(update.src), entry.getValue());
+                        // insertMetricTable(nodeToIndex.get(entry.getKey()),
+                        // nodeToIndex.get(update.src), entry.getValue());
+                        metrics[nodeToIndex.get(entry.getKey())][nodeToIndex.get(update.src)] = entry
+                                .getValue();
                     } else {
                         potentialNodes.add(entry.getKey());
                     }
-                }   
+                }
             }
         }
         
+        undirectGraph();
+
         for (InetAddress addr : potentialNodes) {
             NetworkInterface.getInstance().connectAndAdd(addr);
         }
@@ -179,6 +178,15 @@ public class OverlayRoutingModel {
         return selfAddress;
     }
 
+    private void clearMatrix() {
+        // Fill metrics with default values
+        for (int i = 0; i < metrics.length; i++) {
+            for (int j = 0; j < metrics.length; j++) {
+                metrics[i][j] = DEFAULT_METRIC;
+            }
+        }
+    }
+
     /**
      * If necessary, rebuild the matrix (i.e. do a batch update for the lazy
      * adds and deletes).
@@ -207,18 +215,20 @@ public class OverlayRoutingModel {
         // Create the new metrics matrix
         double[][] newMetrics = new double[newSize][newSize];
 
-        // Populate the new matrix with the pertinent old metrics
+        // Populate the new matrix with the pertinent old metrics -- TODO: Why
+        // are we doing this? Do we want stale values to carry over if for some
+        // reason we didn't receive fresh ones in the last update?
         for (int i = 0; i < newSize; i++) {
             for (int j = 0; j < newSize; j++) {
                 if (j >= newIndexToNode.size() || i >= newIndexToNode.size()) {
                     newMetrics[i][j] = DEFAULT_METRIC;
                 } else {
-                    newMetrics[i][j] = metrics[nodeToIndex.get(newIndexToNode
-                            .get(i))][nodeToIndex.get(newIndexToNode.get(j))];
+                    newMetrics[i][j] = metrics[nodeToIndex.get(newIndexToNode.get(i))][nodeToIndex
+                            .get(newIndexToNode.get(j))];
                 }
             }
         }
-        
+
         // Assign indexes to the new nodes
         for (InetAddress node : nodesToAdd) {
             newIndexToNode.add(node);
@@ -270,18 +280,16 @@ public class OverlayRoutingModel {
                 System.out.println("I know about these nodes");
                 for (int i = 0; i < indexToNode.length; i++)
                     System.out.println(i + ": " + indexToNode[i].toString());
-                
+
                 System.out.println("\n\n");
             }
-            
+
             // Add all of this new node's edges to the queue
             int index = nodeToIndex.get(addr);
             for (int i = 0; i < metrics.length; i++) {
                 // If this is a valid edge to a new node, add it to the queue
-                if (!nodesInTree.containsKey(indexToNode[i])
-                        && metrics[index][i] > 0)
-                    edges.add(new Edge(node, new TreeNode(indexToNode[i]),
-                            metrics[index][i]));
+                if (!nodesInTree.containsKey(indexToNode[i]) && metrics[index][i] > 0)
+                    edges.add(new Edge(node, new TreeNode(indexToNode[i]), metrics[index][i]));
             }
 
         } while (!edges.isEmpty());
@@ -342,6 +350,25 @@ public class OverlayRoutingModel {
         metrics[row][col] = value;
         metrics[col][row] = value;
     }
+    
+    /*
+     * Take the average of the two edges between each node.
+     */
+    private void undirectGraph() {
+        for (int i = 0; i < nodeToIndex.size(); i++) {
+            for (int j = i + 1; j < nodeToIndex.size(); j++) {
+                if (metrics[i][j] == DEFAULT_METRIC) {
+                    metrics[i][j] = metrics[j][i];
+                } else if (metrics[j][i] == DEFAULT_METRIC) {
+                    metrics[j][i] = metrics[i][j];
+                } else {
+                    double avg = (metrics[i][j] + metrics[j][i]) / 2.0;
+                    metrics[i][j] = avg;
+                    metrics[j][i] = avg;
+                }
+            }
+        }
+    }
 
     /* ------------------------ Static Inner Classes ----------------------- */
 
@@ -391,8 +418,7 @@ public class OverlayRoutingModel {
         public boolean equals(Object o) {
             if (o instanceof Edge) {
                 Edge e = (Edge) o;
-                return dest.equals(e.dest) && src.equals(e.src)
-                        && weight == e.weight;
+                return dest.equals(e.dest) && src.equals(e.src) && weight == e.weight;
             }
             return false;
         }

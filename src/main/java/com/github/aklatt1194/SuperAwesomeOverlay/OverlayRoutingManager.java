@@ -80,6 +80,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
             } catch (InterruptedException e) { }
             
             ourUpdate = getMetricsFromDB();
+            System.out.println(ourUpdate.metrics);
             
             synchronized (this) {
                 inUpdate = true; // flag that we are in an update
