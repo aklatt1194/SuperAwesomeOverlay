@@ -149,6 +149,13 @@ public class OverlayRoutingModel {
     public synchronized TreeNode getMST() {
         return root;
     }
+    
+    /**
+     * Forwarding table getter.
+     */
+    public synchronized Map<InetAddress, InetAddress> getForwardingTable() {
+        return new HashMap<InetAddress, InetAddress>(fTable);
+    }
 
     /**
      * Known Node getter. Returns an array of all the nodes including any that
