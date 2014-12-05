@@ -4,7 +4,7 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
 public class SimpleDatagramPacket {
-    public static final int UNITCAST_TYPE = 0;
+    public static final int UNICAST_TYPE = 0;
     public static final int BROADCAST_TYPE = 1;
     
     private static final int HEADER_LENGTH = 20;
@@ -17,7 +17,7 @@ public class SimpleDatagramPacket {
     private byte[] payload;
     
     public SimpleDatagramPacket(InetAddress src, InetAddress dst, int srcPort, int dstPort, byte[] payload) {
-        this(src, dst, 0, 1, srcPort, dstPort, payload);
+        this(src, dst, UNICAST_TYPE, 1, srcPort, dstPort, payload);
     }
     
     public SimpleDatagramPacket(InetAddress src, InetAddress dst, int type, int ttl, int srcPort, int dstPort, byte[] payload) {
