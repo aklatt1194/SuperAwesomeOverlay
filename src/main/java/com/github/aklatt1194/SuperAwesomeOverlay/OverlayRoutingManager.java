@@ -127,6 +127,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
     public void nodeAddCallback(InetAddress addr) {
         synchronized (this) {
             if (inUpdate) {
+                sendLinkStateUpdate(Arrays.asList(addr), ourUpdate);
                 expected.add(addr);
                 end = System.currentTimeMillis() + LS_TIMEOUT;
             } else {
