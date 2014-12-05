@@ -17,10 +17,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
-import com.github.aklatt1194.SuperAwesomeOverlay.utils.IPUtils;
 
 public class NetworkInterface implements Runnable {
-    public static final String[] NODES_BOOTSTRAP = {"ec2-54-149-47-168.us-west-2.compute.amazonaws.com", "ec2-54-93-174-218.eu-central-1.compute.amazonaws.com"};
+    public static final String[] NODES_BOOTSTRAP = {"ec2-54-172-69-181.compute-1.amazonaws.com", "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com"};
     private static final int LINK_PORT = 3333;
 
     private static NetworkInterface instance = null;
@@ -167,15 +166,6 @@ public class NetworkInterface implements Runnable {
         // figure out the remote address
         InetAddress addr = socketChannel.socket().getInetAddress();
 
-        // if a node that we are already connected to is connecting to us, we
-        // should do something
-        if (tcpLinkTable.get(addr) != null) {
-            if (IPUtils.compareIPs(addr, model.getSelfAddress()) > 0) {
-                socketChannel.close();
-                return;
-            }
-        }
-
         // add the new socketChannel to the table
         tcpLinkTable.put(addr, socketChannel);
 
@@ -193,14 +183,6 @@ public class NetworkInterface implements Runnable {
         try {
             socketChannel.finishConnect();
             InetAddress addr = socketChannel.socket().getInetAddress();
-
-            // Do something if we're already connected
-            if (tcpLinkTable.get(addr) != null) {
-                if (IPUtils.compareIPs(addr, model.getSelfAddress()) > 0) {
-                    socketChannel.close();
-                    return;
-                }
-            }
 
             tcpLinkTable.put(addr, socketChannel);
             socketChannel.register(selector, SelectionKey.OP_READ);

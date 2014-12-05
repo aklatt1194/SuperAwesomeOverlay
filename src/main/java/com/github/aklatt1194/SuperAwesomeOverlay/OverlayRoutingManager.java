@@ -25,7 +25,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
     public static final int PORT = 55555;
     public static final long LINK_STATE_PERIOD = 1000 * 60; // 60 sec
     public static final long METRIC_AVERAGE_PERIOD = 60 * 1000 * 5; // 5 min
-    public static final long LS_TIMEOUT = 4 * 1000;
+    public static final long LS_TIMEOUT = 2 * 1000;
     public static final long BOOTUP_TIME = 2 * 1000;
 
     private BaseLayerSocket socket;
@@ -106,6 +106,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
                 }                
                 
                 packet = socket.receive(end - System.currentTimeMillis());
+                
                 synchronized (this) {
                     if (packet == null && System.currentTimeMillis() > end) {
                     	inUpdate = false;
@@ -115,7 +116,6 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
             }
 
             for (InetAddress addr : expected) {
-                System.out.println("DEBUG: Didn't receive a LS packet from: " + addr.toString());
                 NetworkInterface.getInstance().disconnectFromNode(addr);
             }
             
@@ -154,7 +154,6 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
                 socket.send(packet);
             } catch (IOException e) {
                 // TODO -- not connected to this host
-                System.out.println("DEBUG: manager trying to send to closed socket");
             }
         }
     }
