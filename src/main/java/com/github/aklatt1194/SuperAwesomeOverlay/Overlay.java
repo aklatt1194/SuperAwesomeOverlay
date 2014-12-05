@@ -44,6 +44,7 @@ public class Overlay {
         // websockets
         Server server = new Server("localhost", 8025, "/endpoints", null,
                 ChatEndpoint.class);
+        ChatEndpoint.init(overlayRoutingModel);
         server.start();
 
         // uncomment for extended logging

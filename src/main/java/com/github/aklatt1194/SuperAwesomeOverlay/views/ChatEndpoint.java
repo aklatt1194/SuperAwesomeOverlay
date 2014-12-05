@@ -51,10 +51,6 @@ public class ChatEndpoint {
      * Write the message to the websocket
      */
     private static void send(String msg) {
-        if (sessions.isEmpty()) {
-            return;
-        }
-        
         for (Session session : sessions) {
             if (!session.isOpen()) {
                 sessions.remove(session);
