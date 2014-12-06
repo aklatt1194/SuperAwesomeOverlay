@@ -31,12 +31,33 @@ SAO.chat = function() {
   var socket = new WebSocket('ws://' + window.location.host + ':8025/endpoints/chat'),
     chatWindow = $('#chat-window');
 
-  socket.onmessage = function(msg) {
-    chatWindow.append($('<p></p>').html(msg.data));
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-  }
+  socket.onmessage = function(data) {
+    var msg = JSON.parse(data.data);
+
+    var time = $('<span></span>').html(new Date(msg.timestamp).toLocaleTimeString()).addClass('timestamp');
+    var name = $('<span></span>').html(msg.user).addClass('username');
+    var message = $('<span></span>').html(msg.message).css("color", msg.color).addClass('message');
+    var linebreak = $('<br/>');
+
+    chatWindow.append(time, name, message, linebreak);
+  };
 
   $('#send-message').click(function() {
-    socket.send($('#message').val());
+    socket.send(JSON.stringify({
+      message: $('#message').val(),
+      user: $('#username').val(),
+      color: $("#color-box").css("background-color"),
+      timestamp: new Date().getTime()
+    }));
+  });
+
+  $("#message-color").ColorPickerSliders({
+    color: 'blue',
+    size: 'sm',
+    placement: 'top',
+    swatches: false,
+    onchange: function(container, color) {
+      $("#color-box").css("background-color", color.tiny.toRgbString());
+    }
   });
 };

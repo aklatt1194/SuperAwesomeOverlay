@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/bootstrap-theme.min.css">
     <link rel="stylesheet" href="css/font-awesome.min.css">
     <link rel="stylesheet" href="css/networkoverlay.css">
+    <link rel="stylesheet" href="css/bootstrap.colorpickersliders.min.css">
   </head>
 
   <body>

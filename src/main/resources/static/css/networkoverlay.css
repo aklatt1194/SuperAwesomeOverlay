@@ -6,6 +6,10 @@ body {
   margin-bottom: 20px;
 }
 
+.input-group-addon {
+  min-width: 100px;
+}
+
 .node {
   cursor: pointer;
 }
@@ -14,4 +18,17 @@ body {
   height: 500px;
   position: relative;
   overflow: auto;
+}
+
+#chat-window .time {
+  padding-right: 10px;
+}
+
+#chat-window .username {
+  padding-right: 10px;
+}
+
+#color-box {
+  background-color: blue;
+  cursor: default;
 }
