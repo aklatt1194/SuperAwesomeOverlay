@@ -10,16 +10,22 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import javax.xml.bind.DatatypeConverter;
+
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class NetworkInterface implements Runnable {
-    public static final String[] NODES_BOOTSTRAP = {"ec2-54-172-69-181.compute-1.amazonaws.com", "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com"};
+    public static final String[] NODES_BOOTSTRAP = { "ec2-54-172-69-181.compute-1.amazonaws.com", "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com" };
     private static final int LINK_PORT = 3333;
 
     private static NetworkInterface instance = null;
@@ -36,6 +42,11 @@ public class NetworkInterface implements Runnable {
 
     private BlockingQueue<InetAddress> potentialNodes;
     private BlockingQueue<InetAddress> nodesToRemove;
+
+    private Map<SocketChannel, ByteBuffer> partialReads;
+    private Map<SocketChannel, ByteBuffer> partialWrites;
+
+    private PacketRouter packetRouter;
 
     public static NetworkInterface getInstance() {
         if (instance == null)
@@ -56,6 +67,9 @@ public class NetworkInterface implements Runnable {
         pendingChangeRequests = new LinkedBlockingQueue<>();
         pendingWrites = new ConcurrentHashMap<>();
 
+        partialReads = new HashMap<>();
+        partialWrites = new HashMap<>();
+
         // the main selector that we will use
         selector = SelectorProvider.provider().openSelector();
 
@@ -69,9 +83,10 @@ public class NetworkInterface implements Runnable {
         serverChannel.socket().bind(new InetSocketAddress(LINK_PORT));
         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-        // start the main thread
-        Thread thread = new Thread(this);
-        thread.start();
+        // start the main thread and the packet router
+        new Thread(this).start();
+        packetRouter = new PacketRouter();
+        new Thread(packetRouter).start();
 
         // try to connect to any of the bootstrap nodes (hopefully at least one)
         for (String node : NODES_BOOTSTRAP) {
@@ -118,6 +133,8 @@ public class NetworkInterface implements Runnable {
                     if (socketChannel != null) {
                         // get rid of any buffers that this channel may have had
                         pendingWrites.remove(addr);
+                        partialReads.remove(socketChannel);
+                        partialWrites.remove(socketChannel);
 
                         socketChannel.keyFor(selector).cancel();
                         try {
@@ -208,6 +225,8 @@ public class NetworkInterface implements Runnable {
         if (numRead == -1) {
             // Remote closed socket cleanly
             pendingWrites.remove(socketChannel.socket().getInetAddress());
+            partialReads.remove(socketChannel);
+            partialWrites.remove(socketChannel);
             try {
                 socketChannel.close();
             } catch (IOException e) {
@@ -222,23 +241,49 @@ public class NetworkInterface implements Runnable {
             return;
         }
 
-        // stick the packet on the read queue of the appropriate socket
-        readBuffer.flip();
-        SimpleDatagramPacket packet = SimpleDatagramPacket.createFromBuffer(readBuffer,
-                socketChannel.socket().getInetAddress(), model.getSelfAddress());
+        ByteBuffer totalBytes;
+        // if there are pending partial reads, stick them on the front
+        if (partialReads.containsKey(socketChannel)) {
+            ByteBuffer prev = partialReads.remove(socketChannel);
 
-        SimpleSocket socket = portMap.get(packet.getDestinationPort());
-        if (socket == null) {
-            System.err.println("DEBUG: Read a packet addressed to a port no one is bound to");
-            return;
+            prev.flip();
+            readBuffer.flip();
+
+            totalBytes = ByteBuffer.allocate(prev.remaining() + readBuffer.remaining());
+            totalBytes.put(prev);
+            totalBytes.put(readBuffer);
+        } else {
+            totalBytes = readBuffer;
         }
-        
-        while (true) {
-            try {
-                socket.readQueue.put(packet);
-                break;
-            } catch (InterruptedException e) {
-                continue;
+
+        // try to decode as many packets as we can
+        totalBytes.flip();
+        while (totalBytes.hasRemaining()) {
+            SimpleDatagramPacket packet = SimpleDatagramPacket.createFromBuffer(totalBytes,
+                    socketChannel.socket().getInetAddress(), model.getSelfAddress());
+
+            // check to see if this was a partial read, if it was save it for
+            // later
+            if (packet == null) {
+                if (partialReads.containsKey(socketChannel)) {
+                    ByteBuffer prev = partialReads.get(socketChannel);
+                    prev.flip();
+
+                    ByteBuffer buf = ByteBuffer.allocate(prev.remaining() + totalBytes.remaining());
+                    buf.put(prev);
+                    buf.put(totalBytes);
+
+                    partialReads.put(socketChannel, buf);
+                } else {
+                    ByteBuffer buf = ByteBuffer.allocate(totalBytes.remaining());
+                    buf.put(totalBytes);
+
+                    partialReads.put(socketChannel, buf);
+                }
+
+                return;
+            } else {
+                packetRouter.processPacket(packet);
             }
         }
     }
@@ -250,10 +295,24 @@ public class NetworkInterface implements Runnable {
         BlockingQueue<ByteBuffer> queue = pendingWrites.get(dst);
 
         while (!queue.isEmpty()) {
-            ByteBuffer buf = queue.peek();
+            ByteBuffer buf = queue.poll();
+            ByteBuffer totalBytes;
+
+            if (partialWrites.containsKey(socketChannel)) {
+                ByteBuffer prev = partialWrites.get(socketChannel);
+
+                prev.flip();
+
+                totalBytes = ByteBuffer.allocate(prev.remaining() + buf.remaining());
+                totalBytes.put(prev);
+                totalBytes.put(buf);
+                totalBytes.flip();
+            } else {
+                totalBytes = buf;
+            }
 
             try {
-                socketChannel.write(buf);
+                socketChannel.write(totalBytes);
             } catch (IOException e) {
                 // If an exception occurs during a write, the node is probably
                 // gone
@@ -261,15 +320,15 @@ public class NetworkInterface implements Runnable {
                 return;
             }
 
-            if (buf.remaining() > 0) {
+            if (totalBytes.remaining() > 0) {
                 // the socket buffer is full
+                ByteBuffer remaining = ByteBuffer.allocate(totalBytes.remaining());
+                remaining.put(totalBytes);
 
-                // TODO: WTF - If we only write a partial packet to the socket,
-                // we need to keep the remaining bytes around to write once
-                // there is room.
+                partialWrites.put(socketChannel, remaining);
+
                 break;
             }
-            queue.remove();
         }
 
         // we are done, set the key back to read
@@ -366,6 +425,56 @@ public class NetworkInterface implements Runnable {
         private ChangeRequest(InetAddress addr, int ops) {
             this.addr = addr;
             this.ops = ops;
+        }
+    }
+
+    private class PacketRouter implements Runnable {
+        private List<SimpleDatagramPacket> queue;
+
+        private PacketRouter() {
+            queue = new LinkedList<>();
+        }
+
+        private void processPacket(SimpleDatagramPacket packet) {
+            synchronized (queue) {
+                queue.add(packet);
+                queue.notify();
+            }
+        }
+
+        @Override
+        public void run() {
+            while (true) {
+                SimpleDatagramPacket packet = null;
+
+                synchronized (queue) {
+                    while (packet == null) {
+                        try {
+                            queue.wait();
+                        } catch (InterruptedException e) {
+                        }
+                        packet = queue.remove(0);
+                    }
+                }
+
+                SimpleSocket socket = portMap.get(packet.getDestinationPort());
+
+                if (socket == null) {
+                    System.err
+                            .println("DEBUG: Read a packet addressed to a port no one is bound to");
+                    continue;
+                }
+
+                while (true) {
+                    try {
+                        socket.readQueue.put(packet);
+                        break;
+                    } catch (InterruptedException e) {
+                        continue;
+                    }
+                }
+
+            }
         }
     }
 }
