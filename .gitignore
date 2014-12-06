@@ -9,3 +9,4 @@ target/
 output.log
 overlay.pid
 ipdb.sqlite
+metrics.db
