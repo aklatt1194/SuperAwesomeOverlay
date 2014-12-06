@@ -5,11 +5,13 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.websocket.*;
+import javax.websocket.OnClose;
+import javax.websocket.OnMessage;
+import javax.websocket.OnOpen;
+import javax.websocket.Session;
 import javax.websocket.server.ServerEndpoint;
 
-import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
-import com.github.aklatt1194.SuperAwesomeOverlay.network.OverlayDatagramSocket;
+import com.github.aklatt1194.SuperAwesomeOverlay.network.OverlaySocket;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.SimpleDatagramPacket;
 
 @ServerEndpoint(value = "/chat")
@@ -18,13 +20,13 @@ public class ChatEndpoint {
     private static Charset charset = Charset.forName("UTF-8");
     
     private static List<Session> sessions;
-    private static OverlayDatagramSocket socket;
+    private static OverlaySocket socket;
     private static ReceiverThread receiver;
     
-    public static void init(OverlayRoutingModel model) {
+    public static void init() {
         sessions = new ArrayList<Session>();
         
-        socket = new OverlayDatagramSocket(model);
+        socket = new OverlaySocket();
         socket.bind(PORT);
         
         receiver = new ReceiverThread(socket);
@@ -46,7 +48,12 @@ public class ChatEndpoint {
     public void onMessage(String message, Session session) {
         SimpleDatagramPacket packet = new SimpleDatagramPacket(null, null, PORT, 
                 PORT, message.getBytes(charset));
-        socket.send(packet);
+        try {
+            socket.send(packet);
+        } catch (IOException e) {
+            System.err.println("Error sending message to socket");
+            e.printStackTrace();
+        }
     }
     
     /**
@@ -73,9 +80,9 @@ public class ChatEndpoint {
      * websocket
      */
     private static class ReceiverThread extends Thread {
-        private OverlayDatagramSocket socket;
+        private OverlaySocket socket;
         
-        public ReceiverThread(OverlayDatagramSocket socket) {
+        public ReceiverThread(OverlaySocket socket) {
             this.socket = socket;
         }
         

@@ -10,8 +10,13 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -37,7 +42,7 @@ public class NetworkInterface implements Runnable {
 
     private BlockingQueue<InetAddress> potentialNodes;
     private BlockingQueue<InetAddress> nodesToRemove;
-    
+
     private PacketRouter packetRouter;
 
     public static NetworkInterface getInstance() {
@@ -231,7 +236,8 @@ public class NetworkInterface implements Runnable {
         SimpleDatagramPacket packet = SimpleDatagramPacket.createFromBuffer(readBuffer,
                 socketChannel.socket().getInetAddress(), model.getSelfAddress());
 
-        packetRouter.processPacket(packet);
+        packetRouter.processPacket(new IncomingPacket(packet, socketChannel.socket()
+                .getInetAddress()));
     }
 
     // pull any pending writes of a socket's queue and write them to the socket
@@ -270,40 +276,56 @@ public class NetworkInterface implements Runnable {
 
     // Queues up a packet so that it can be sent by the selector
     protected void send(SimpleDatagramPacket packet) throws IOException {
-        // place a pending request on the queue for this destination address
-        if (tcpLinkTable.get(packet.getDestination()) == null) {
-            // we aren't actually connected to the destination
-            // TODO:
-            throw new IOException();
-        }
+        if ((packet.flags | SimpleDatagramPacket.BASELAYER) == SimpleDatagramPacket.BASELAYER) {
+            if ((packet.flags | SimpleDatagramPacket.BROADCAST) == SimpleDatagramPacket.BROADCAST) {
+                throw new IOException("No support for baselayer broadcast");
+            }
 
-        while (true) {
-            try {
-                pendingChangeRequests.put(new ChangeRequest(packet.getDestination(),
-                        SelectionKey.OP_WRITE));
-                break;
-            } catch (InterruptedException e) {
-                continue;
+            sendHelper(packet, Arrays.asList(packet.getDestination()));
+        } else if ((packet.flags | SimpleDatagramPacket.OVERLAY) == SimpleDatagramPacket.OVERLAY) {
+            if ((packet.flags | SimpleDatagramPacket.BROADCAST) != SimpleDatagramPacket.BROADCAST) {
+                throw new IOException("No support for overlay unicast");
+            }
+
+            sendHelper(packet, model.getKnownNeighbors());
+        }
+    }
+
+    // Moves a packet on to a list of destinations
+    private void sendHelper(SimpleDatagramPacket packet, List<InetAddress> nextHops) {
+        for (InetAddress nextHop : nextHops) {
+            // place a pending request on the queue for this destination address
+            if (tcpLinkTable.get(nextHop) == null) {
+                // We can't figure out where to sent this
+                System.err.println("Can't figure out where to send");
+            }
+
+            while (true) {
+                try {
+                    pendingChangeRequests.put(new ChangeRequest(nextHop, SelectionKey.OP_WRITE));
+                    break;
+                } catch (InterruptedException e) {
+                    continue;
+                }
+            }
+
+            // place the data onto the pending writes queue for the proper
+            // socket
+            BlockingQueue<ByteBuffer> queue = pendingWrites.get(nextHop);
+            if (queue == null) {
+                queue = new LinkedBlockingQueue<ByteBuffer>();
+                pendingWrites.put(nextHop, queue);
+            }
+
+            while (true) {
+                try {
+                    queue.put(packet.getRawPacket());
+                    break;
+                } catch (InterruptedException e) {
+                    continue;
+                }
             }
         }
-
-        // place the data onto the pending writes queue for the proper socket
-        BlockingQueue<ByteBuffer> queue = pendingWrites.get(packet.getDestination());
-        if (queue == null) {
-            queue = new LinkedBlockingQueue<ByteBuffer>();
-            pendingWrites.put(packet.getDestination(), queue);
-        }
-
-        while (true) {
-            try {
-                queue.put(packet.getRawPacket());
-                break;
-            } catch (InterruptedException e) {
-                continue;
-            }
-        }
-
-        // Wakeup the selector thread
         selector.wakeup();
     }
 
@@ -360,36 +382,78 @@ public class NetworkInterface implements Runnable {
         }
     }
 
+    private class IncomingPacket {
+        private SimpleDatagramPacket packet;
+        private InetAddress lastHop;
+
+        private IncomingPacket(SimpleDatagramPacket packet, InetAddress lastHop) {
+            this.packet = packet;
+            this.lastHop = lastHop;
+        }
+    }
+
     private class PacketRouter implements Runnable {
-        private BlockingQueue<SimpleDatagramPacket> queue;
+        private BlockingQueue<IncomingPacket> queue;
 
         private PacketRouter() {
             queue = new LinkedBlockingQueue<>();
         }
 
-        private void processPacket(SimpleDatagramPacket packet) {
-            queue.add(packet);
+        private void processPacket(IncomingPacket incomingPacket) {
+            queue.add(incomingPacket);
         }
 
         @Override
         public void run() {
             while (true) {
-                SimpleDatagramPacket packet = null;
+                IncomingPacket incomingPacket = null;
 
-                try {
-                    packet = queue.take();
-                } catch (InterruptedException e1) {
+                while (incomingPacket == null) {
+                    try {
+                        incomingPacket = queue.take();
+                    } catch (InterruptedException e1) {
+                    }
                 }
 
-                SimpleSocket socket = portMap.get(packet.getDestinationPort());
+                SimpleDatagramPacket packet = incomingPacket.packet;
+                InetAddress lastHop = incomingPacket.lastHop;
 
-                if (socket == null) {
-                    System.err.println("DEBUG: Read a packet addressed to a unbound port");
-                    continue;
+                if ((packet.flags & SimpleDatagramPacket.BASELAYER) == SimpleDatagramPacket.BASELAYER) {
+                    forwardToSocket(packet);
+                } else {
+                    forwardToSocket(packet);
+                    routeOverlayPacket(packet, lastHop);
                 }
-
-                socket.readQueue.add(packet);
             }
+        }
+
+        // pass the packet back up to the read queue of the socket that is bound
+        // to the appropriate port
+        private void forwardToSocket(SimpleDatagramPacket packet) {
+            SimpleSocket socket = portMap.get(packet.getDestinationPort());
+            if (socket == null) {
+                System.err.println("DEBUG: Read a packet addressed to a unbound port");
+                return;
+            }
+            socket.readQueue.add(packet);
+        }
+
+        // A helper method for sending out/forwarding along a broadcast packet
+        private void routeOverlayPacket(SimpleDatagramPacket packet, InetAddress prevHop) {
+            // decrement and check the ttl
+            if (--packet.ttl == 0) {
+                System.err.println("Packet ttl expired");
+                return;
+            }
+
+            // Go through the list of known nodes and figure out which
+            // outInterfaces
+            // we need to be sending out on.
+            Set<InetAddress> outInterfaces = new HashSet<InetAddress>(model.getForwardingTable()
+                    .values());
+            outInterfaces.remove(prevHop);
+            
+            sendHelper(packet, new ArrayList<InetAddress>(outInterfaces));
         }
     }
 }
