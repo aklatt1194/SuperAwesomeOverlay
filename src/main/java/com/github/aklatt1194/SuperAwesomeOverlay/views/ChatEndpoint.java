@@ -23,8 +23,10 @@ public class ChatEndpoint {
     
     public static void init(OverlayRoutingModel model) {
         sessions = new ArrayList<Session>();
+        
         socket = new OverlayDatagramSocket(model);
         socket.bind(PORT);
+        
         receiver = new ReceiverThread(socket);
         receiver.start();
     }

@@ -9,7 +9,6 @@ import java.util.Map;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class OverlayDatagramSocket extends SimpleSocket {
-    
     private OverlayRoutingModel model;
     
     public OverlayDatagramSocket(OverlayRoutingModel model) {
@@ -68,9 +67,9 @@ public class OverlayDatagramSocket extends SimpleSocket {
         // Go through the list of known nodes and figure out which outInterfaces
         // we need to be sending out on.
         for (InetAddress node : knownNeighbors) {
-            InetAddress portForNode = fTable.get(node);
-            if (!portForNode.equals(packet.getSource())) {
-                outInterfaces.add(portForNode);
+            InetAddress linkForNode = fTable.get(node);
+            if (!linkForNode.equals(packet.getSource())) {
+                outInterfaces.add(linkForNode);
             }
         }
         

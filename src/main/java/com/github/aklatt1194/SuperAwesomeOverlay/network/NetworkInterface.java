@@ -19,7 +19,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class NetworkInterface implements Runnable {
-    public static final String[] NODES_BOOTSTRAP = {"ec2-54-172-69-181.compute-1.amazonaws.com", "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com"};
+    public static final String[] NODES_BOOTSTRAP = { "ec2-54-172-69-181.compute-1.amazonaws.com",
+            "ec2-54-72-49-50.eu-west-1.compute.amazonaws.com" };
     private static final int LINK_PORT = 3333;
 
     private static NetworkInterface instance = null;
@@ -36,6 +37,8 @@ public class NetworkInterface implements Runnable {
 
     private BlockingQueue<InetAddress> potentialNodes;
     private BlockingQueue<InetAddress> nodesToRemove;
+    
+    private PacketRouter packetRouter;
 
     public static NetworkInterface getInstance() {
         if (instance == null)
@@ -69,9 +72,10 @@ public class NetworkInterface implements Runnable {
         serverChannel.socket().bind(new InetSocketAddress(LINK_PORT));
         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-        // start the main thread
-        Thread thread = new Thread(this);
-        thread.start();
+        // start the main thread and packet router thread
+        packetRouter = new PacketRouter();
+        new Thread(packetRouter).start();
+        new Thread(this).start();
 
         // try to connect to any of the bootstrap nodes (hopefully at least one)
         for (String node : NODES_BOOTSTRAP) {
@@ -227,20 +231,7 @@ public class NetworkInterface implements Runnable {
         SimpleDatagramPacket packet = SimpleDatagramPacket.createFromBuffer(readBuffer,
                 socketChannel.socket().getInetAddress(), model.getSelfAddress());
 
-        SimpleSocket socket = portMap.get(packet.getDestinationPort());
-        if (socket == null) {
-            System.err.println("DEBUG: Read a packet addressed to a port no one is bound to");
-            return;
-        }
-        
-        while (true) {
-            try {
-                socket.readQueue.put(packet);
-                break;
-            } catch (InterruptedException e) {
-                continue;
-            }
-        }
+        packetRouter.processPacket(packet);
     }
 
     // pull any pending writes of a socket's queue and write them to the socket
@@ -366,6 +357,39 @@ public class NetworkInterface implements Runnable {
         private ChangeRequest(InetAddress addr, int ops) {
             this.addr = addr;
             this.ops = ops;
+        }
+    }
+
+    private class PacketRouter implements Runnable {
+        private BlockingQueue<SimpleDatagramPacket> queue;
+
+        private PacketRouter() {
+            queue = new LinkedBlockingQueue<>();
+        }
+
+        private void processPacket(SimpleDatagramPacket packet) {
+            queue.add(packet);
+        }
+
+        @Override
+        public void run() {
+            while (true) {
+                SimpleDatagramPacket packet = null;
+
+                try {
+                    packet = queue.take();
+                } catch (InterruptedException e1) {
+                }
+
+                SimpleSocket socket = portMap.get(packet.getDestinationPort());
+
+                if (socket == null) {
+                    System.err.println("DEBUG: Read a packet addressed to a unbound port");
+                    continue;
+                }
+
+                socket.readQueue.add(packet);
+            }
         }
     }
 }
