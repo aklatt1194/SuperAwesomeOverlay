@@ -13,10 +13,12 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel.Tree
 
 public class NetworkTopologyEndpoint {
     private GeolocateDatabaseProvider db;
+    private OverlayRoutingModel model;
 
     public NetworkTopologyEndpoint(GeolocateDatabaseProvider db,
             OverlayRoutingModel model) {
         this.db = db;
+        this.model = model;
 
         // set known nodes JSON endpoint
         get("/endpoints/network_topology", (req, res) -> {
@@ -29,7 +31,7 @@ public class NetworkTopologyEndpoint {
         ResultNode node = new ResultNode();
         GeoIPEntry geoEntry = db.lookupNode(root.address);
         
-        node.ip = root.address.getHostAddress();
+        node.hostname = root.address.getHostName();
         node.lat = geoEntry.lat;
         node.lon = geoEntry.lon;
         
@@ -47,7 +49,7 @@ public class NetworkTopologyEndpoint {
     @SuppressWarnings("unused")
     private static class ResultNode {
         private List<ResultNode> children;
-        private String ip;
+        private String hostname;
         private double lat;
         private double lon;
     }

@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,7 +25,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
     public static final int PORT = 55555;
     public static final long LINK_STATE_PERIOD = 1000 * 60; // 60 sec
     public static final long METRIC_AVERAGE_PERIOD = 60 * 1000 * 5; // 5 min
-    public static final long LS_TIMEOUT = 4 * 1000;
+    public static final long LS_TIMEOUT = 2 * 1000;
     public static final long BOOTUP_TIME = 2 * 1000;
 
     private BaseLayerSocket socket;
@@ -34,6 +35,8 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
 
     private volatile long end;
     private volatile boolean inUpdate;
+    
+    private TopologyUpdate ourUpdate;
 
     private Thread managerThread;
 
@@ -45,6 +48,8 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
 
         expected = Collections.synchronizedSet(new HashSet<InetAddress>());
         inUpdate = false;
+        
+        ourUpdate = getMetricsFromDB();
 
         model.addListener(this);
 
@@ -64,62 +69,70 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
         }
 
         while (true) {
-            TopologyUpdate upd = null;
             SimpleDatagramPacket packet = null;
             List<InetAddress> neighbors = null;
+            List<TopologyUpdate> received = new LinkedList<>();
             expected.clear();
             
             // wait until we receive a LS packet
-            packet = socket.receive(LINK_STATE_PERIOD);
+            try {
+                packet = socket.interruptibleReceive(LINK_STATE_PERIOD);
+            } catch (InterruptedException e) { }
+            
+            ourUpdate = getMetricsFromDB();
             
             synchronized (this) {
                 inUpdate = true; // flag that we are in an update
                 neighbors = model.getKnownNeighbors();
             }
             
+            TopologyUpdate ourUpdate = getMetricsFromDB();
+            received.add(ourUpdate);
+            
             expected.addAll(neighbors);
-            sendLinkStateUpdate(neighbors);
-
-            if (packet != null) {
-                upd = TopologyUpdate.deserialize(packet.getPayload());
-                model.recordLinkStateInformation(upd);
-                expected.remove(packet.getSource());
-            }
+            sendLinkStateUpdate(neighbors, ourUpdate);
+            
+            end = System.currentTimeMillis() + LS_TIMEOUT;
 
             while (true) {
+                if (packet != null) {
+                    TopologyUpdate receivedUpdate = TopologyUpdate.deserialize(packet.getPayload());
+                    if (!expected.contains(receivedUpdate.src)) {
+                        sendLinkStateUpdate(Arrays.asList(receivedUpdate.src), ourUpdate);
+                    }
+                    
+                    received.add(receivedUpdate);
+                    expected.remove(receivedUpdate.src);
+                }                
+                
                 packet = socket.receive(end - System.currentTimeMillis());
+                
                 synchronized (this) {
                     if (packet == null && System.currentTimeMillis() > end) {
+                    	inUpdate = false;
                         break;
                     }
                 }
-                
-                if (packet == null) {
-                    continue;
-                }
-
-                upd = TopologyUpdate.deserialize(packet.getPayload());
-                model.recordLinkStateInformation(upd);
-                expected.remove(packet.getSource());
             }
-
-            model.triggerFullUpdate();
-            
-            inUpdate = false;
 
             for (InetAddress addr : expected) {
-                System.out.println("DEBUG: Didn't receive a LS packet from: " + addr.toString());
                 NetworkInterface.getInstance().disconnectFromNode(addr);
             }
+            
+            model.update(received);
         }
     }
     
     @Override
     public void nodeAddCallback(InetAddress addr) {
-        sendLinkStateUpdate(Arrays.asList(addr));
-        if (inUpdate) {
-            expected.add(addr);
-            end = System.currentTimeMillis() + LS_TIMEOUT;
+        synchronized (this) {
+            if (inUpdate) {
+                sendLinkStateUpdate(Arrays.asList(addr), ourUpdate);
+                expected.add(addr);
+                end = System.currentTimeMillis() + LS_TIMEOUT;
+            } else {
+                managerThread.interrupt();
+            }
         }
     }
 
@@ -132,12 +145,7 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
      * Send out a link state update to all of our neighbors and apply it to
      * ourself
      */
-    private void sendLinkStateUpdate(List<InetAddress> dests) {
-        // Get the update from the db
-        TopologyUpdate upd = getMetricsFromDB();
-        // Apply it to ourselves
-        model.recordLinkStateInformation(upd);
-
+    private void sendLinkStateUpdate(List<InetAddress> dests, TopologyUpdate upd) {
         // Send it to all of our neighbors
         for (InetAddress dst : dests) {
             SimpleDatagramPacket packet = new SimpleDatagramPacket(upd.src, dst, PORT, PORT,
@@ -146,7 +154,6 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
                 socket.send(packet);
             } catch (IOException e) {
                 // TODO -- not connected to this host
-                System.out.println("DEBUG: manager trying to send to closed socket");
             }
         }
     }

@@ -75,7 +75,11 @@ SAO.networkMap = {
       .attr("r", function(d) {
         return d.hostname === window.location.host ? 10 : 5;
       })
-      .attr("fill", "#F00");
+      .attr("fill", "#F00")
+      .on("click", function (d) {
+        console.log(d);
+        window.location.href = "http://" + d.hostname + "/network";
+      });
 
     this.linkVis.selectAll(".link").data(links)
       .enter()
