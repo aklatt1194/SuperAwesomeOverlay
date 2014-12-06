@@ -6,7 +6,6 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Date;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -15,7 +14,6 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
     private static final String DEFAULT_NAME = "sqlite-test.db";
     private static final String LATENCY_TABLE = "latency";
     private static final String THROUGHPUT_TABLE = "throughput";
-    private static final String PATH = "/home/ubuntu/";
 
     private Connection c;
 
@@ -30,7 +28,7 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
      * Setup the connection and construct the db and tables if necessary
      */
     public MetricsDatabaseProvider(String name) {
-        String path = name.length() == 0 ? DEFAULT_NAME : PATH + name;
+        String path = name.length() == 0 ? DEFAULT_NAME : name + ".db";
         try {
             // Open a connection to the DB (creates the DB if it does not exist)
             Class.forName("org.sqlite.JDBC");

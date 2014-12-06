@@ -22,7 +22,7 @@ import com.github.aklatt1194.SuperAwesomeOverlay.views.WebRoutes;
 public class Overlay {
     public static void main(String[] args) throws DeploymentException {
         MetricsDatabaseManager metricsdb = new MetricsDatabaseProvider(
-                "Metrics");
+                "metrics");
         GeolocateDatabaseProvider geodb = new GeolocateDatabaseProvider();
 
         // create routing table and initialize the network interface
