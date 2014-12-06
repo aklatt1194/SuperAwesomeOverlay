@@ -1,12 +1,14 @@
 package com.github.aklatt1194.SuperAwesomeOverlay;
 
 import java.io.IOException;
+import java.net.InetAddress;
 
 import javax.websocket.DeploymentException;
 
 import org.glassfish.tyrus.server.Server;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider.GeoIPEntry;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseProvider;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
@@ -47,6 +49,10 @@ public class Overlay {
         ChatEndpoint.init();
         server.start();
 
+        InetAddress me = overlayRoutingModel.getSelfAddress();
+        GeoIPEntry geoEntry = geodb.lookupNode(me);
+        System.out.println("I am: " + me + " located in: " + geoEntry.city_name + ", " + geoEntry.region_name + ", " + geoEntry.country);
+        
         // uncomment for extended logging
         // BasicConfigurator.configure();
 

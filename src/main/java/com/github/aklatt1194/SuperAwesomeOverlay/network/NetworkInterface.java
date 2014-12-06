@@ -12,9 +12,9 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
@@ -276,23 +276,23 @@ public class NetworkInterface implements Runnable {
 
     // Queues up a packet so that it can be sent by the selector
     protected void send(SimpleDatagramPacket packet) throws IOException {
-        if ((packet.flags | SimpleDatagramPacket.BASELAYER) == SimpleDatagramPacket.BASELAYER) {
-            if ((packet.flags | SimpleDatagramPacket.BROADCAST) == SimpleDatagramPacket.BROADCAST) {
+        if ((packet.flags & SimpleDatagramPacket.BASELAYER) == SimpleDatagramPacket.BASELAYER) {
+            if ((packet.flags & SimpleDatagramPacket.BROADCAST) == SimpleDatagramPacket.BROADCAST) {
                 throw new IOException("No support for baselayer broadcast");
             }
 
             sendHelper(packet, Arrays.asList(packet.getDestination()));
-        } else if ((packet.flags | SimpleDatagramPacket.OVERLAY) == SimpleDatagramPacket.OVERLAY) {
-            if ((packet.flags | SimpleDatagramPacket.BROADCAST) != SimpleDatagramPacket.BROADCAST) {
+        } else if ((packet.flags & SimpleDatagramPacket.OVERLAY) == SimpleDatagramPacket.OVERLAY) {
+            if ((packet.flags & SimpleDatagramPacket.BROADCAST) != SimpleDatagramPacket.BROADCAST) {
                 throw new IOException("No support for overlay unicast");
             }
 
-            sendHelper(packet, model.getKnownNeighbors());
+            sendHelper(packet, new HashSet<>(model.getForwardingTable().values()));
         }
     }
 
     // Moves a packet on to a list of destinations
-    private void sendHelper(SimpleDatagramPacket packet, List<InetAddress> nextHops) {
+    private void sendHelper(SimpleDatagramPacket packet, Collection<InetAddress> nextHops) {
         for (InetAddress nextHop : nextHops) {
             // place a pending request on the queue for this destination address
             if (tcpLinkTable.get(nextHop) == null) {
@@ -453,7 +453,7 @@ public class NetworkInterface implements Runnable {
                     .values());
             outInterfaces.remove(prevHop);
             
-            sendHelper(packet, new ArrayList<InetAddress>(outInterfaces));
+            sendHelper(packet, outInterfaces);
         }
     }
 }
