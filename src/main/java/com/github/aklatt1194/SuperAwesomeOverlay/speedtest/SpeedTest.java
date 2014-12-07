@@ -1,6 +1,5 @@
 package com.github.aklatt1194.SuperAwesomeOverlay.speedtest;
 
-import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -20,7 +19,7 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModelListe
 public class SpeedTest {
     private final int SERVER_PORT = 4545;
     private final int NUM_PACKETS = 1000;
-    private final int TEST_INTERVAL = 10 * 60 * 1000; // connect to a remote
+    private final int TEST_INTERVAL = 30 * 60 * 1000; // connect to a remote
                                                       // every 30 minutes to do
                                                       // a test
 
