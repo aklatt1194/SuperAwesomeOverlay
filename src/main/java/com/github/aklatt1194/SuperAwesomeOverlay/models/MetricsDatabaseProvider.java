@@ -73,6 +73,12 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
             long endTime) {
         return getConnectionData(node, startTime, endTime, THROUGHPUT_TABLE);
     }
+    
+    public Map<Long, Double> getThroughputData(String node, long startTime,
+            long endTime, long bucketSize) {
+        return getConnectionData(node, startTime, endTime, bucketSize,
+                THROUGHPUT_TABLE);
+    }
 
     /* Private helper methods */
 

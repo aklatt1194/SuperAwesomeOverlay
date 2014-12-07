@@ -35,8 +35,7 @@ public interface MetricsDatabaseManager {
      *        in UNIX ms since the epoch format.
      * @return A map from time to latency for the interval.
      */
-    public Map<Long, Double> getLatencyData(String node, long startTime,
-            long endTime);
+    public Map<Long, Double> getLatencyData(String node, long startTime, long endTime);
 
     /**
      * Get all latency data for the connection to the given node between
@@ -47,11 +46,11 @@ public interface MetricsDatabaseManager {
      *        (inclusive) in UNIX ms since the epoch format.
      * @param endTime The end of the interval we are interested in (exclusive)
      *        in UNIX ms since the epoch format.
-     * @param bucketSize The bucket size in milliseconds. 
+     * @param bucketSize The bucket size in milliseconds.
      * @return A map from time to latency for the interval.
      */
-    public Map<Long, Double> getLatencyData(String node, long startTime,
-            long endTime, long bucketSize);
+    public Map<Long, Double> getLatencyData(String node, long startTime, long endTime,
+            long bucketSize);
 
     /**
      * Get all throughput data for the connection to the given node between
@@ -64,18 +63,31 @@ public interface MetricsDatabaseManager {
      *        in UNIX ms since the epoch format.
      * @return A map from time to throughput for the interval.
      */
-    public Map<Long, Double> getThroughputData(String node, long startTime,
-            long endTime);
-    
+    public Map<Long, Double> getThroughputData(String node, long startTime, long endTime);
+
     /**
-     * Get the time of the last latency ping saved in the db
-     * (returns -1 on error or if no data exists)
+     * Get all throughput data for the connection to the given node between
+     * startTime and endTime
+     * 
+     * @param node The node we are connected to
+     * @param startTime The beginning of the interval we are interested in
+     *        (inclusive) in UNIX ms since the epoch format.
+     * @param endTime The end of the interval we are interested in (exclusive)
+     *        in UNIX ms since the epoch format.
+     * @param bucketSize The bucket size in milliseconds.
+     * @return A map from time to throughput for the interval.
+     */
+    public Map<Long, Double> getThroughputData(String node, long startTime, long endTime, long bucketSize);
+
+    /**
+     * Get the time of the last latency ping saved in the db (returns -1 on
+     * error or if no data exists)
      */
     public long getLastLatencyRecordTime(String node);
-    
+
     /**
-     * Get the time of the last throughput metric saved in the db 
-     * (returns -1 on error or if no data exists)
+     * Get the time of the last throughput metric saved in the db (returns -1 on
+     * error or if no data exists)
      */
     public long getLastThroughputRecordTime(String node);
 }

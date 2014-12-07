@@ -32,6 +32,14 @@ public class MetricsEndpoints {
                             Long.parseLong(req.params("end")),
                             Long.parseLong(req.params("bucket_size")));
                 }, json());
+        
+        get("/endpoints/throughput/:start/:end/:bucket_size",
+                (req, res) -> {
+                    res.type("application/json");
+                    return lookupThroughput(Long.parseLong(req.params("start")),
+                            Long.parseLong(req.params("end")),
+                            Long.parseLong(req.params("bucket_size")));
+                }, json());
     }
 
     // Get all latencies during the specified time series.
@@ -52,6 +60,35 @@ public class MetricsEndpoints {
                     node.getHostAddress(), startTime, endTime, bucketSize);
 
             for (Entry<Long, Double> entry : latencies.entrySet()) {
+                List<Object> entryList = new ArrayList<>();
+                entryList.add(entry.getKey());
+                entryList.add(entry.getValue());
+                nodeMetrics.data.add(entryList);
+            }
+
+            response.add(nodeMetrics);
+        }
+        return response;
+    }
+    
+    // Get all throughput measurements during the specified time series.
+    private List<NodeMetrics> lookupThroughput(long startTime, long endTime,
+            long bucketSize) {
+        List<NodeMetrics> response = new ArrayList<>();
+
+        for (InetAddress node : model.getKnownNeighbors()) {
+            GeoIPEntry geoEntry = geodb.lookupNode(node);
+            String nodeLocation = "";
+            
+            nodeLocation += (geoEntry.city_name != null) ? geoEntry.city_name + ", " : "";
+            nodeLocation += (geoEntry.region_name != null) ? geoEntry.region_name + ", " : "";
+            nodeLocation += geoEntry.country;
+            
+            NodeMetrics nodeMetrics = new NodeMetrics(nodeLocation);
+            Map<Long, Double> throughput = metricsdb.getThroughputData(
+                    node.getHostAddress(), startTime, endTime, bucketSize);
+
+            for (Entry<Long, Double> entry : throughput.entrySet()) {
                 List<Object> entryList = new ArrayList<>();
                 entryList.add(entry.getKey());
                 entryList.add(entry.getValue());

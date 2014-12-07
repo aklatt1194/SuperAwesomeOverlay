@@ -1,8 +1,21 @@
 <#include "header.ftl">
 
 <div class="container">
-  <div id="latency-chart"></div>
-  <div id="throughput-chart"></div>
+
+  <ul class="nav nav-tabs" role="tablist">
+    <li class="active"><a href="#latency" role="tab" data-toggle="tab">Latency</a></li>
+    <li><a href="#throughput" role="tab" data-toggle="tab">Throughput</a></li>
+  </ul>
+
+  <div class="tab-content">
+    <div class="tab-pane active" id="latency">
+      <div id="latency-chart"></div>
+    </div>
+    <div class="tab-pane" id="throughput">
+      <div id="throughput-chart"></div>
+    </div>
+  </div>
+
 </div> <!-- /container -->
 
     <script src="js/jquery.min.js"></script>
@@ -12,7 +25,8 @@
     <script src="js/network-metrics.js"></script>
     <script>
       SAO.setup();
-      SAO.metrics.latencyChart();
+      SAO.metrics.chart('latency', 'Latency (ms)');
+      SAO.metrics.chart('throughput', 'Throughput (Bps)');
     </script>
   </body>
 </html>
