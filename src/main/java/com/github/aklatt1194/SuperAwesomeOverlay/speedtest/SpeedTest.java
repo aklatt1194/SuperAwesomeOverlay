@@ -26,14 +26,12 @@ public class SpeedTest {
 
     private OverlayRoutingModel model;
     private MetricsDatabaseManager db;
-    private Thread receiver;
-    
+
     public SpeedTest(OverlayRoutingModel model, MetricsDatabaseManager db) {
         this.model = model;
         this.db = db;
-        
-        receiver = new Thread(new Receiver());
-        receiver.start();
+
+        new Thread(new Receiver()).start();
         new Thread(new Sender()).start();
     }
 
@@ -51,40 +49,24 @@ public class SpeedTest {
 
         @Override
         public void run() {
-            Socket s = null;
-            OutputStream os = null;
-            try {
-                s = ss.accept();
-                os = s.getOutputStream();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            while (true) {
+                try (Socket s = ss.accept();
+                        OutputStream os = s.getOutputStream();
+                        DataOutputStream dos = new DataOutputStream(os)) {
+                    Random r = new Random();
 
-            DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(os));
-            Random r = new Random();
+                    for (int i = 0; i < NUM_PACKETS; i++) {
+                        final int packetSize = r.nextInt(8192) + 2048;
+                        final byte[] packet = new byte[packetSize];
+                        r.nextBytes(packet);
 
-            for (int i = 0; i < NUM_PACKETS; i++) {
-                final int packetSize = r.nextInt(8192) + 2048;
-                final byte[] packet = new byte[packetSize];
-                r.nextBytes(packet);
-
-                try {
-                    dos.writeInt(packetSize);
-                    dos.write(packet);
-                    dos.flush();
+                        dos.writeInt(packetSize);
+                        dos.write(packet);
+                        dos.flush();
+                    }
                 } catch (IOException e) {
-                    e.printStackTrace();
                 }
             }
-
-            try {
-                dos.close();
-                os.close();
-                s.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
         }
     }
 
@@ -92,7 +74,7 @@ public class SpeedTest {
         private BlockingQueue<InetAddress> hosts;
 
         public Receiver() {
-            hosts = new LinkedBlockingQueue<>();            
+            hosts = new LinkedBlockingQueue<>();
             model.addListener(this);
         }
 
@@ -102,7 +84,7 @@ public class SpeedTest {
                 if (hosts.isEmpty()) {
                     hosts.addAll(model.getKnownNeighbors());
                 }
-                
+
                 InetAddress host;
                 try {
                     host = hosts.take();
@@ -110,46 +92,29 @@ public class SpeedTest {
                     continue;
                 }
 
-                Socket s;
-                InputStream is;
-                try {
-                    s = new Socket(host, SERVER_PORT);
-                    is = s.getInputStream();
-                } catch (IOException e1) {
-                    continue;
-                }
+                try (Socket s = new Socket(host, SERVER_PORT);
+                        InputStream is = s.getInputStream();
+                        DataInputStream dis = new DataInputStream(is)) {
 
-                DataInputStream dis = new DataInputStream(is);
+                    int totalBytes = 0;
+                    long totalTime = 0;
 
-                int totalBytes = 0;
-                long totalTime = 0;
+                    for (int i = 0; i < NUM_PACKETS; i++) {
 
-                for (int i = 0; i < NUM_PACKETS; i++) {
-                    try {
                         int packetSize = dis.readInt();
-                        
+
                         long start = System.currentTimeMillis();
                         final byte[] packet = new byte[packetSize];
                         dis.readFully(packet);
                         totalTime += System.currentTimeMillis() - start;
                         totalBytes += packetSize;
-                    } catch (IOException e) {
-                        break;
-                    }
-                }
-                
-                double downstreamBytesPerSecond = totalBytes / (totalTime / 1000.0);
-                
-                if (!Double.isNaN(downstreamBytesPerSecond)) {
-                    db.addThroughputData(host.getHostAddress(), System.currentTimeMillis(), downstreamBytesPerSecond);
-                }
 
-                try {
-                    dis.close();
-                    is.close();
-                    s.close();
+                    }
+
+                    double downstreamBytesPerSecond = totalBytes / (totalTime / 1000.0);
+                    db.addThroughputData(host.getHostAddress(), System.currentTimeMillis(),
+                            downstreamBytesPerSecond);
                 } catch (IOException e) {
-                    e.printStackTrace();
                 }
 
                 try {
@@ -163,7 +128,6 @@ public class SpeedTest {
         @Override
         public void nodeAddCallback(InetAddress addr) {
             hosts.add(addr);
-            receiver.interrupt();
         }
 
         @Override
