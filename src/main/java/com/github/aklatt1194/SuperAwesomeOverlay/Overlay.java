@@ -13,6 +13,7 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseProvider;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 import com.github.aklatt1194.SuperAwesomeOverlay.network.NetworkInterface;
+import com.github.aklatt1194.SuperAwesomeOverlay.speedtest.SpeedTest;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.ChatEndpoint;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.KnownNodesEndpoint;
 import com.github.aklatt1194.SuperAwesomeOverlay.views.MetricsEndpoints;
@@ -57,5 +58,6 @@ public class Overlay {
         // BasicConfigurator.configure();
 
         new PingTester(overlayRoutingModel, metricsdb);
+        new SpeedTest(overlayRoutingModel, metricsdb);
     }
 }
