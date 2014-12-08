@@ -19,8 +19,8 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModelListe
 public class SpeedTest {
     private final int SERVER_PORT = 4545;
     private final int NUM_PACKETS = 1000;
-    private final int TEST_INTERVAL = 30 * 60 * 1000; // connect to a remote
-                                                      // every 30 minutes to do
+    private final int TEST_INTERVAL = 10 * 60 * 1000; // connect to a remote
+                                                      // every 10 minutes to do
                                                       // a test
 
     private OverlayRoutingModel model;
@@ -114,6 +114,9 @@ public class SpeedTest {
                     db.addThroughputData(host.getHostAddress(), System.currentTimeMillis(),
                             downstreamBytesPerSecond);
                 } catch (IOException e) {
+                    // this test failed for some reason, stick this host on the end of the queue
+                    hosts.add(host);
+                    continue;
                 }
 
                 try {
