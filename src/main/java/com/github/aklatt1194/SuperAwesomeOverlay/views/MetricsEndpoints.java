@@ -37,8 +37,7 @@ public class MetricsEndpoints {
                 (req, res) -> {
                     res.type("application/json");
                     return lookupThroughput(Long.parseLong(req.params("start")),
-                            Long.parseLong(req.params("end")),
-                            Long.parseLong(req.params("bucket_size")));
+                            Long.parseLong(req.params("end")));
                 }, json());
     }
 
@@ -72,8 +71,7 @@ public class MetricsEndpoints {
     }
     
     // Get all throughput measurements during the specified time series.
-    private List<NodeMetrics> lookupThroughput(long startTime, long endTime,
-            long bucketSize) {
+    private List<NodeMetrics> lookupThroughput(long startTime, long endTime) {
         List<NodeMetrics> response = new ArrayList<>();
 
         for (InetAddress node : model.getKnownNeighbors()) {
@@ -86,7 +84,7 @@ public class MetricsEndpoints {
             
             NodeMetrics nodeMetrics = new NodeMetrics(nodeLocation);
             Map<Long, Double> throughput = metricsdb.getThroughputData(
-                    node.getHostAddress(), startTime, endTime, bucketSize);
+                    node.getHostAddress(), startTime, endTime);
 
             for (Entry<Long, Double> entry : throughput.entrySet()) {
                 List<Object> entryList = new ArrayList<>();

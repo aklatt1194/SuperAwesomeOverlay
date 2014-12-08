@@ -96,19 +96,21 @@ public class SpeedTest {
                         DataInputStream dis = new DataInputStream(is)) {
 
                     int totalBytes = 0;
-                    long totalTime = 0;
+                    
+                    int packetSize = dis.readInt();
+                    byte[] packet = new byte[packetSize];
+                    long start = System.currentTimeMillis();
+                    dis.readFully(packet);
+                    totalBytes += packetSize;
 
-                    for (int i = 0; i < NUM_PACKETS; i++) {
-
-                        int packetSize = dis.readInt();
-
-                        long start = System.currentTimeMillis();
-                        final byte[] packet = new byte[packetSize];
+                    for (int i = 0; i < NUM_PACKETS - 1; i++) {
+                        packetSize = dis.readInt();
+                        packet = new byte[packetSize];
                         dis.readFully(packet);
-                        totalTime += System.currentTimeMillis() - start;
                         totalBytes += packetSize;
-
                     }
+                    
+                    long totalTime = System.currentTimeMillis() - start;
 
                     double downstreamBytesPerSecond = totalBytes / (totalTime / 1000.0);
                     db.addThroughputData(host.getHostAddress(), System.currentTimeMillis(),
