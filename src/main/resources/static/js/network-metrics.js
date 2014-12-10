@@ -197,7 +197,7 @@ SAO.metrics = {
 
             this.points.forEach(function(point) {
               res += '<tr><td style="text-align: right; padding-right: 10px;"><span style="color: ' + point.series.color + ';">' + point.series.name + '</span></td>';
-              res += '<td>' + Number(point.y).toFixed(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + ' Bytes per second </td></tr>';
+              res += '<td>' + Number(point.y).toFixed(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + ' bps </td></tr>';
             });
 
             res += '</table></div>';
