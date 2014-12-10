@@ -22,7 +22,7 @@ SAO.setNodeNavigation = function(nodes) {
     if (nodes[i].self) {
       $('a.current-node').html(location_string);
     } else {
-      $('.dropdown-menu').append($('<li></li>').append($('<a></a>').html(location_string).attr('href', 'http://' + nodes[i].hostname + window.location.pathname)));
+      $('.dropdown-menu').append($('<li></li>').append($('<a></a>').html(location_string).attr('href', 'http://' + nodes[i].hostname + window.location.pathname + window.location.hash)));
     }
   }
 };
