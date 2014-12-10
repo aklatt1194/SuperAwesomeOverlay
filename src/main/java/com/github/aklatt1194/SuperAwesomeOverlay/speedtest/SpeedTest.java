@@ -30,8 +30,15 @@ public class SpeedTest {
         this.model = model;
         this.db = db;
 
-        new Thread(new Receiver()).start();
         new Thread(new Sender()).start();
+
+        // add some jitter so that a bunch of nodes starting at the same time
+        // don't all try to connect to the same host
+        try {
+            Thread.sleep(new Random().nextInt(TEST_INTERVAL));
+        } catch (InterruptedException e) {
+        }
+        new Thread(new Receiver()).start();
     }
 
     class Sender implements Runnable {
@@ -96,7 +103,7 @@ public class SpeedTest {
                         DataInputStream dis = new DataInputStream(is)) {
 
                     int totalBytes = 0;
-                    
+
                     int packetSize = dis.readInt();
                     byte[] packet = new byte[packetSize];
                     long start = System.currentTimeMillis();
@@ -109,14 +116,15 @@ public class SpeedTest {
                         dis.readFully(packet);
                         totalBytes += packetSize;
                     }
-                    
+
                     long totalTime = System.currentTimeMillis() - start;
 
                     double downstreamBytesPerSecond = totalBytes / (totalTime / 1000.0);
                     db.addThroughputData(host.getHostAddress(), System.currentTimeMillis(),
                             downstreamBytesPerSecond);
                 } catch (IOException e) {
-                    // this test failed for some reason, stick this host on the end of the queue
+                    // this test failed for some reason, stick this host on the
+                    // end of the queue
                     hosts.add(host);
                     continue;
                 }
