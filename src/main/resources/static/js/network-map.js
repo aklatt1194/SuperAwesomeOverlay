@@ -82,7 +82,13 @@ SAO.networkMap = {
         window.location.href = "http://" + d.hostname + "/network";
       })
       .sort(function(a, b) {
-        return d === root ? 1 : -1;
+        if (a === root) {
+          return 1;
+        } else if (b === root) {
+          return -1;
+        } else {
+          return 0;
+        }
       });
 
     this.linkVis.selectAll(".link").data(links)
