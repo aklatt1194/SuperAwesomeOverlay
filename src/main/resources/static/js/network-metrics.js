@@ -14,6 +14,12 @@ SAO.metrics = {
         } else {
           $('.nav-tabs a:first').tab('show');
         }
+        
+        $('.dropdown-menu a').each(function() {
+          $(this).prop('hash', location.hash);
+        });
+      } else {
+        $('.nav-tabs a:first').tab('show');
       }
 
       if (location.hash === '#latency' || location.hash === '') {
