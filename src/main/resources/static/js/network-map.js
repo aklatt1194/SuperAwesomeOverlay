@@ -65,7 +65,9 @@ SAO.networkMap = {
     this.nodeVis.selectAll(".node").data(nodes)
       .enter()
       .append("svg:circle")
-      .attr("class", "node")
+      .attr("class", function(d) {
+        return d === root ? "node self" : "node";
+      })
       .attr("cx", function(d) {
         return self.projection([d.lon, d.lat])[0];
       })
@@ -73,12 +75,14 @@ SAO.networkMap = {
         return self.projection([d.lon, d.lat])[1];
       })
       .attr("r", function(d) {
-        return d.hostname === window.location.host ? 10 : 5;
+        return d === root ? 7 : 5;
       })
-      .attr("fill", "#F00")
       .on("click", function (d) {
         console.log(d);
         window.location.href = "http://" + d.hostname + "/network";
+      })
+      .sort(function(a, b) {
+        return d === root ? 1 : -1;
       });
 
     this.linkVis.selectAll(".link").data(links)

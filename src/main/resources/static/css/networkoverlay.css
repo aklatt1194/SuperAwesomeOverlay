@@ -12,6 +12,13 @@ body {
 
 .node {
   cursor: pointer;
+  fill: red;
+}
+
+.self {
+  stroke: DarkRed;
+  stroke-opacity: 0.5;
+  stroke-width: 6;
 }
 
 #chat-window {

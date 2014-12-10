@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider.GeoIPEntry;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class KnownNodesEndpoint {
@@ -25,12 +26,16 @@ public class KnownNodesEndpoint {
         }, json());
     }
 
-    private List<GeolocateDatabaseProvider.GeoIPEntry> lookupKnownNodes() {
+    private List<GeoIPEntry> lookupKnownNodes() {
         List<GeolocateDatabaseProvider.GeoIPEntry> result = new ArrayList<>();
 
-        for (InetAddress addr : model.getKnownNodes()) {
+        for (InetAddress addr : model.getKnownNeighbors()) {
             result.add(db.lookupNode(addr));
         }
+        
+        GeoIPEntry self = db.lookupNode(model.getSelfAddress());
+        self.self = true;
+        result.add(self);
 
         return result;
     }

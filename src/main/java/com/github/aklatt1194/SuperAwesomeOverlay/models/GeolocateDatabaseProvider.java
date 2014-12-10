@@ -97,5 +97,6 @@ public class GeolocateDatabaseProvider {
         public String city_name;
         public double lat;
         public double lon;
+        public Boolean self;
     }
 }
