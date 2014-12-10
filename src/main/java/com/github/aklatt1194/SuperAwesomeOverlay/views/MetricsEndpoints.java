@@ -5,14 +5,16 @@ import static spark.Spark.get;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider;
+import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider.GeoIPEntry;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
-import com.github.aklatt1194.SuperAwesomeOverlay.models.GeolocateDatabaseProvider.GeoIPEntry;
 
 public class MetricsEndpoints {
     private MetricsDatabaseManager metricsdb;
@@ -33,7 +35,7 @@ public class MetricsEndpoints {
                             Long.parseLong(req.params("bucket_size")));
                 }, json());
         
-        get("/endpoints/throughput/:start/:end/:bucket_size",
+        get("/endpoints/throughput/:start/:end",
                 (req, res) -> {
                     res.type("application/json");
                     return lookupThroughput(Long.parseLong(req.params("start")),
@@ -44,7 +46,10 @@ public class MetricsEndpoints {
     // Get all latencies during the specified time series.
     private List<NodeMetrics> lookupLatencies(long startTime, long endTime,
             long bucketSize) {
-        List<NodeMetrics> response = new ArrayList<>();
+        List<NodeMetrics> response = new LinkedList<>();
+        
+        long minTimestamp = System.currentTimeMillis();
+        NodeMetrics earliestResult = null;
 
         for (InetAddress node : model.getKnownNeighbors()) {
             GeoIPEntry geoEntry = geodb.lookupNode(node);
@@ -57,6 +62,13 @@ public class MetricsEndpoints {
             NodeMetrics nodeMetrics = new NodeMetrics(nodeLocation);
             Map<Long, Double> latencies = metricsdb.getLatencyData(
                     node.getHostAddress(), startTime, endTime, bucketSize);
+            latencies.put(System.currentTimeMillis(), null);
+            
+            long thisMinTimestamp = Collections.min(latencies.keySet());
+            if (thisMinTimestamp < minTimestamp) {
+                minTimestamp = thisMinTimestamp;
+                earliestResult = nodeMetrics;
+            }
 
             for (Entry<Long, Double> entry : latencies.entrySet()) {
                 List<Object> entryList = new ArrayList<>();
@@ -67,13 +79,19 @@ public class MetricsEndpoints {
 
             response.add(nodeMetrics);
         }
+        response.remove(earliestResult);
+        response.add(0, earliestResult);
+        
         return response;
     }
     
     // Get all throughput measurements during the specified time series.
     private List<NodeMetrics> lookupThroughput(long startTime, long endTime) {
-        List<NodeMetrics> response = new ArrayList<>();
+        List<NodeMetrics> response = new LinkedList<>();
 
+        long minTimestamp = System.currentTimeMillis();
+        NodeMetrics earliestResult = null;
+        
         for (InetAddress node : model.getKnownNeighbors()) {
             GeoIPEntry geoEntry = geodb.lookupNode(node);
             String nodeLocation = "";
@@ -85,7 +103,14 @@ public class MetricsEndpoints {
             NodeMetrics nodeMetrics = new NodeMetrics(nodeLocation);
             Map<Long, Double> throughput = metricsdb.getThroughputData(
                     node.getHostAddress(), startTime, endTime);
-
+            throughput.put(System.currentTimeMillis(), null);
+            
+            long thisMinTimestamp = Collections.min(throughput.keySet());
+            if (thisMinTimestamp < minTimestamp) {
+                minTimestamp = thisMinTimestamp;
+                earliestResult = nodeMetrics;
+            }
+            
             for (Entry<Long, Double> entry : throughput.entrySet()) {
                 List<Object> entryList = new ArrayList<>();
                 entryList.add(entry.getKey());
@@ -95,6 +120,9 @@ public class MetricsEndpoints {
 
             response.add(nodeMetrics);
         }
+        response.remove(earliestResult);
+        response.add(0, earliestResult);
+        
         return response;
     }
 

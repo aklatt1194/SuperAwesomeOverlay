@@ -3,8 +3,8 @@
 <div class="container">
 
   <ul class="nav nav-tabs" role="tablist">
-    <li class="active"><a href="#latency" role="tab" data-toggle="tab">Latency</a></li>
-    <li><a href="#throughput" role="tab" data-toggle="tab">Throughput</a></li>
+    <li class="active"><a href="#latency" role="tab">Latency</a></li>
+    <li><a href="#throughput" role="tab">Throughput</a></li>
   </ul>
 
   <div class="tab-content">
@@ -25,8 +25,7 @@
     <script src="js/network-metrics.js"></script>
     <script>
       SAO.setup();
-      SAO.metrics.chart('latency', 'Latency (ms)');
-      SAO.metrics.chart('throughput', 'Throughput (Bps)');
+      SAO.metrics.init();
     </script>
   </body>
 </html>

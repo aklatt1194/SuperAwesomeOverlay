@@ -100,7 +100,7 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
             return result;
 
         String select = String
-                .format("SELECT Time, %s FROM %s WHERE Node='%s' AND Time>=%d AND Time<%d",
+                .format("SELECT Time, %s FROM %s WHERE Node='%s' AND Time>=%d AND Time<=%d",
                         table, table, node, startTime, endTime);
         try {
             // Execute the statement
@@ -146,7 +146,7 @@ public class MetricsDatabaseProvider implements MetricsDatabaseManager {
 
         String select = String
                 .format("SELECT ((min(Time) + %d) / %d) * %d as Time, Node, avg(%s) as %s "
-                        + "FROM %s WHERE Node='%s' AND Time >= %d AND Time <%d "
+                        + "FROM %s WHERE Node='%s' AND Time >= %d AND Time <=%d "
                         + "GROUP BY (Time + %d) / %d, Node", bucketSize / 2,
                         bucketSize, bucketSize, table, table, table, node,
                         startTime, endTime, bucketSize / 2, bucketSize);
