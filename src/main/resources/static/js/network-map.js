@@ -7,7 +7,7 @@ SAO.networkMap = {
       zoomFactor = 0.15,
       width = $('#map').width(),
       height = width * aspectRatio,
-      projection, path, arc, vis, mapVis, linkVis, nodeVis;
+      projection, path, arc, vis, mapVis, linkVis, nodeVis, socket;
 
     projection = d3.geo.mercator()
       .translate([width / 2, 2 * height / 3])
@@ -45,17 +45,20 @@ SAO.networkMap = {
         });
     };
 
-    var drawNetwork = function(root) {
-      var tree,
-        nodes,
-        links;
+    var drawNetwork = function(data) {
+      var root = JSON.parse(data.data),
+        tree, nodes, links, nodeSel, linkSel;
 
       tree = d3.layout.tree();
       nodes = tree.nodes(root);
       links = tree.links(nodes);
 
-      nodeVis.selectAll('.node').data(nodes)
-        .enter()
+      nodeSel = nodeVis.selectAll('.node')
+        .data(nodes, function(d) {
+          return 'node' + d.ip;
+        });
+
+      nodeSel.enter()
         .append('svg:circle')
         .attr('class', function(d) {
           return d === root ? 'node self' : 'node';
@@ -82,8 +85,14 @@ SAO.networkMap = {
           }
         });
 
-      linkVis.selectAll('.link').data(links)
-        .enter()
+      nodeSel.exit().remove();
+
+      linkSel = linkVis.selectAll('.link')
+        .data(links, function(d) {
+          return 'link' + d.source.ip + '<->' + d.target.ip;
+        });
+
+      linkSel.enter()
         .append('svg:path')
         .attr('class', 'link')
         .style('stroke-width', 5)
@@ -96,6 +105,8 @@ SAO.networkMap = {
             target: [d.target.lon, d.target.lat]
           }));
         });
+
+      linkSel.exit().remove();
     };
 
     var resize = function() {
@@ -128,8 +139,10 @@ SAO.networkMap = {
       }
     }
 
+    socket = new WebSocket('ws://' + window.location.host + ':8025/endpoints/topology');
+    socket.onmessage = drawNetwork;
+
     d3.json('/json/world-110m2.json', drawMap);
-    d3.json('/endpoints/network_topology', drawNetwork);
     d3.select(window).on('resize', resize);
   }
 };

@@ -149,5 +149,9 @@ public class SpeedTest {
                 hosts.addAll(model.getKnownNeighbors());
             }
         }
+        
+        @Override
+        public void topologyChangeCallback() {
+        }
     }
 }

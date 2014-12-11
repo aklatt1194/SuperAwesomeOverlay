@@ -135,6 +135,10 @@ public class OverlayRoutingManager implements Runnable, OverlayRoutingModelListe
             }
         }
     }
+    
+    @Override
+    public void topologyChangeCallback() {
+    }
 
     @Override
     public void nodeDeleteCallback(InetAddress addr) {

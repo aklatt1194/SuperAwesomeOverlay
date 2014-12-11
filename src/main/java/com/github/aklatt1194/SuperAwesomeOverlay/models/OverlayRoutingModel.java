@@ -72,6 +72,12 @@ public class OverlayRoutingModel {
             listener.nodeDeleteCallback(addr);
         }
     }
+    
+    public synchronized void notifyListenersTopologyChange() {
+        for (OverlayRoutingModelListener listener : listeners) {
+            listener.topologyChangeCallback();
+        }
+    }
 
     /**
      * Trigger all of the batched link state updates to rebuild the model
@@ -108,6 +114,8 @@ public class OverlayRoutingModel {
 
         // Build the forwarding table
         constructForwardingTable();
+        
+        notifyListenersTopologyChange();
     }
 
     /**

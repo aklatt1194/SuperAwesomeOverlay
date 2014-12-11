@@ -41,13 +41,13 @@ public class Overlay {
         // web routes and endpoints
         new WebRoutes();
         new KnownNodesEndpoint(geodb, overlayRoutingModel);
-        new NetworkTopologyEndpoint(geodb, overlayRoutingModel);
         new MetricsEndpoints(metricsdb, geodb, overlayRoutingModel);
 
         // websockets
         Server server = new Server("localhost", 8025, "/endpoints", null,
-                ChatEndpoint.class);
+                ChatEndpoint.class, NetworkTopologyEndpoint.class);
         ChatEndpoint.init();
+        NetworkTopologyEndpoint.init(geodb, overlayRoutingModel);
         server.start();
 
         InetAddress me = overlayRoutingModel.getSelfAddress();
