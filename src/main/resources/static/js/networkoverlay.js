@@ -34,12 +34,17 @@ SAO.chat = function() {
   socket.onmessage = function(data) {
     var msg = JSON.parse(data.data);
 
-    var time = $('<span></span>').html(new Date(msg.timestamp).toLocaleTimeString()).addClass('timestamp');
-    var name = $('<span></span>').html(msg.user).addClass('username');
-    var message = $('<span></span>').html(msg.message).css("color", msg.color).addClass('message');
-    var linebreak = $('<br/>');
+    var time = $('<div></div>').html(new Date(msg.timestamp).toLocaleTimeString().replace(/:[0-9]* /g, '')).addClass('timestamp');
+    var name = $('<div></div>').html(msg.user + ':').addClass('username');
+    var message = $('<div></div>').html(msg.message).css("color", msg.color).addClass('message');
 
-    chatWindow.append(time, name, message, linebreak);
+    chatWindow.append(time, name, message);
+    chatWindow.scrollTop(chatWindow[0].scrollHeight);
+  };
+
+  socket.onclose = function() {
+    chatWindow.append($('<h3></h3>').html('disconnected from server'));
+    chatWindow.scrollTop(chatWindow[0].scrollHeight);
   };
 
   $('#send-message').click(function() {
@@ -52,7 +57,7 @@ SAO.chat = function() {
   });
 
   $("#message-color").ColorPickerSliders({
-    color: 'blue',
+    color: '#1F3D5C',
     size: 'sm',
     placement: 'top',
     swatches: false,

@@ -11,7 +11,7 @@
         <div class="col-md-offset-2 col-md-4">
           <div class="input-group">
             <span class="input-group-addon">Username</span>
-            <input id="username" type="text" class="form-control">
+            <input id="username" type="text" class="form-control" maxlength="8" value="Unknown">
           </div>
         </div>
 

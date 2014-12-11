@@ -23,19 +23,38 @@ body {
 
 #chat-window {
   height: 500px;
+  margin-left: -25px;
+  margin-right: -15px;
   position: relative;
   overflow: auto;
 }
 
-#chat-window .time {
-  padding-right: 10px;
+#chat-window .timestamp {
+  float: left;
+  margin-right: 5px;
+  text-align: right;
+  width: 60px;
 }
 
 #chat-window .username {
-  padding-right: 10px;
+  color: black;
+  float: left;
+  font-weight: bold;
+  margin-right: 10px;
+  overflow: hidden;
+  text-align: right;
+  width: 80px;
+}
+
+#chat-window .message {
+  overflow: hidden;
 }
 
 #color-box {
-  background-color: blue;
+  background-color: #1F3D5C;
   cursor: default;
+}
+
+h3 {
+  color: red;
 }

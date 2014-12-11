@@ -54,6 +54,9 @@ public class ChatEndpoint {
             System.err.println("Error sending message to socket");
             e.printStackTrace();
         }
+        
+        // echo it back to any chatters on this node
+        send(message);
     }
     
     /**
