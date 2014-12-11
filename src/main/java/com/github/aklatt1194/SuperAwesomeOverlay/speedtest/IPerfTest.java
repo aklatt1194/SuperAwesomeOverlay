@@ -15,7 +15,7 @@ import com.github.aklatt1194.SuperAwesomeOverlay.models.MetricsDatabaseManager;
 import com.github.aklatt1194.SuperAwesomeOverlay.models.OverlayRoutingModel;
 
 public class IPerfTest implements Runnable {
-    public static final int TEST_INTERVAL = 10 * 60 * 1000;
+    public static final int TEST_INTERVAL = 5 * 60 * 1000;
     public static final String[] COMMAND = { "iperf", "-y", "C", "-t", "2", "-p", "4545", "-c" };
 
     public Map<InetAddress, Long> lastTest;
