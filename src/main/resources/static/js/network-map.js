@@ -2,22 +2,27 @@ var SAO = SAO || {};
 
 SAO.networkMap = {
   init: function() {
-    var self = this;
-    var color = d3.scale.ordinal().range(['#777', '#797979', '#888', '#898989', '#999', '#9a9a9a', '#aaaaaa', 'bababa']);
+    var color = d3.scale.ordinal().range(['#777', '#797979', '#888', '#898989', '#999', '#9a9a9a', '#aaaaaa', 'bababa']),
+      aspectRatio = 0.6,
+      zoomFactor = 0.15,
+      width = $('#map').width(),
+      height = width * aspectRatio,
+      projection, path, arc, vis, mapVis, linkVis, nodeVis;
 
-    this.projection = d3.geo.mercator()
-      .translate([570, 480])
-      .scale(175);
+    projection = d3.geo.mercator()
+      .translate([width / 2, 2 * height / 3])
+      .scale(width * zoomFactor);
 
-    this.path = d3.geo.path().projection(this.projection);
+    path = d3.geo.path().projection(projection);
+    arc = d3.geo.greatArc().precision(3);
 
-    var vis = d3.select("#map").append("svg")
-      .attr("width", 1140)
-      .attr("height", 700);
+    vis = d3.select('#map').append('svg')
+      .style('width', width + 'px')
+      .style('height', height + 'px');
 
-    var mapVis = vis.append("g");
-    this.linkVis = vis.append("g");
-    this.nodeVis = vis.append("g");
+    mapVis = vis.append('g');
+    linkVis = vis.append('g');
+    nodeVis = vis.append('g');
 
     var drawMap = function(error, data) {
       var countries = topojson.object(data, data.objects.countries).geometries,
@@ -25,85 +30,106 @@ SAO.networkMap = {
         i = -1,
         n = countries.length;
 
-      mapVis.selectAll(".country").data(countries)
+      mapVis.selectAll('.country').data(countries)
         .enter()
-        .insert("path")
-        .attr("class", "country")
-        .attr("title", function(d, i) {
+        .insert('path')
+        .attr('class', 'country')
+        .attr('title', function(d, i) {
           return d.name;
         })
-        .attr("d", self.path)
-        .style("fill", function(d, i) {
+        .attr('d', path)
+        .style('fill', function(d, i) {
           return color(d.color = d3.max(neighbors[i], function(n) {
             return countries[n].color;
           }) + 1 | 0);
         });
-
-      SAO.knownNodes;
     };
 
-    d3.json("/json/world-110m2.json", drawMap);
-    $.get("/endpoints/network_topology", (function(self) {
-      return function(root) {
-        self.drawNetwork.call(self, root);
+    var drawNetwork = function(root) {
+      var tree,
+        nodes,
+        links;
+
+      tree = d3.layout.tree();
+      nodes = tree.nodes(root);
+      links = tree.links(nodes);
+
+      nodeVis.selectAll('.node').data(nodes)
+        .enter()
+        .append('svg:circle')
+        .attr('class', function(d) {
+          return d === root ? 'node self' : 'node';
+        })
+        .attr('cx', function(d) {
+          return projection([d.lon, d.lat])[0];
+        })
+        .attr('cy', function(d) {
+          return projection([d.lon, d.lat])[1];
+        })
+        .attr('r', function(d) {
+          return d === root ? 7 : 5;
+        })
+        .on('click', function(d) {
+          window.location.href = 'http://' + d.hostname + '/network';
+        })
+        .sort(function(a, b) {
+          if (a === root) {
+            return 1;
+          } else if (b === root) {
+            return -1;
+          } else {
+            return 0;
+          }
+        });
+
+      linkVis.selectAll('.link').data(links)
+        .enter()
+        .append('svg:path')
+        .attr('class', 'link')
+        .style('stroke-width', 5)
+        .style('stroke', 'blue')
+        .style('fill', 'none')
+        .style('opacity', 0.5)
+        .attr('d', function(d) {
+          return path(arc({
+            source: [d.source.lon, d.source.lat],
+            target: [d.target.lon, d.target.lat]
+          }));
+        });
+    };
+
+    var resize = function() {
+      var newWidth = $('#map').width();
+
+      if (newWidth != width) {
+        width = newWidth;
+        height = aspectRatio * width;
+
+        projection.translate([width / 2, 2 * height / 3])
+          .scale(zoomFactor * width);
+
+        vis.style('width', width + 'px')
+          .style('height', height + 'px');
+
+        vis.selectAll('.country').attr('d', path);
+        vis.selectAll('.node').attr('cx', function(d) {
+            return projection([d.lon, d.lat])[0];
+          })
+          .attr('cy', function(d) {
+            return projection([d.lon, d.lat])[1];
+          });
+
+        vis.selectAll('.link').attr('d', function(d) {
+          return path(arc({
+            source: [d.source.lon, d.source.lat],
+            target: [d.target.lon, d.target.lat]
+          }));
+        });
       }
-    })(this));
-  },
+    }
 
-  drawNetwork: function(root) {
-    var self = this,
-      tree,
-      nodes,
-      links,
-      path = d3.geo.path().projection(this.projection),
-      arc = d3.geo.greatArc().precision(3);
-
-    tree = d3.layout.tree();
-    nodes = tree.nodes(root);
-    links = tree.links(nodes);
-
-    this.nodeVis.selectAll(".node").data(nodes)
-      .enter()
-      .append("svg:circle")
-      .attr("class", function(d) {
-        return d === root ? "node self" : "node";
-      })
-      .attr("cx", function(d) {
-        return self.projection([d.lon, d.lat])[0];
-      })
-      .attr("cy", function(d) {
-        return self.projection([d.lon, d.lat])[1];
-      })
-      .attr("r", function(d) {
-        return d === root ? 7 : 5;
-      })
-      .on("click", function (d) {
-        console.log(d);
-        window.location.href = "http://" + d.hostname + "/network";
-      })
-      .sort(function(a, b) {
-        if (a === root) {
-          return 1;
-        } else if (b === root) {
-          return -1;
-        } else {
-          return 0;
-        }
-      });
-
-    this.linkVis.selectAll(".link").data(links)
-      .enter()
-      .append("svg:path")
-      .attr("class", "link")
-      .style("stroke-width", 5)
-      .style("stroke", "blue")
-      .style("fill", "none")
-      .style("opacity", 0.5)
-      .attr("d", function(d) {
-        return path(arc({
-          source: [d.source.lon, d.source.lat],
-          target: [d.target.lon, d.target.lat]
-        }));
-      });
+    d3.json('/json/world-110m2.json', drawMap);
+    d3.json('/endpoints/network_topology', drawNetwork);
+    d3.select(window).on('resize', resize);
   }
 };
